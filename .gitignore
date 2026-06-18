@@ -1,0 +1,11 @@
+.env
+logs/
+daily_brief.json
+tweets_draft.txt
+linkedin_drafts.txt
+venv/
+__pycache__/
+*.pyc
+last_run.json
+last_run.json.bak
+daily_brief_backup.json

@@ -1,0 +1,87 @@
+"""
+crew.py — Newsletter Briefing Crew
+Tweets are written and pushed in run_crew.py (pure Python).
+This crew handles only the email composition and sending.
+"""
+
+import os
+from crewai import Agent, Task, Crew, Process, LLM
+from tools import SendEmailTool
+
+# ─── LLM ──────────────────────────────────────────────────────────────────────
+
+gpt4o = LLM(
+    model="gpt-4o",
+    api_key=os.environ.get("OPENAI_API_KEY"),
+)
+
+# ─── Tools ────────────────────────────────────────────────────────────────────
+
+send_email = SendEmailTool()
+
+# ─── Agent ────────────────────────────────────────────────────────────────────
+
+email_composer = Agent(
+    role="Email Composer",
+    goal="Compose and send the daily newsletter briefing email.",
+    backstory=(
+        "You are a sharp business communicator who writes clean, well-structured "
+        "HTML briefing emails for a professional AI/tech/finance audience."
+    ),
+    llm=gpt4o,
+    tools=[send_email],
+    verbose=True,
+    max_iter=3,
+)
+
+# ─── Task ─────────────────────────────────────────────────────────────────────
+
+task_email = Task(
+    description=(
+        "Compose and send the daily briefing email.\n\n"
+        "Date: {today_date}\n"
+        "Stories: {stories_json}\n"
+        "Source emails: {emails_json}\n"
+        "Counts: {total_fetched} fetched | {total_extracted} extracted | {total_included} included (grade>=5)\n"
+        "Tweets (already pushed to Buffer): {tweets_json}\n"
+        "LinkedIn posts (already pushed to Buffer): {linkedin_json}\n\n"
+        "Send via send_email tool with:\n"
+        "  subject: 'Daily Newsletter Briefing - {today_iso}'\n"
+        "  body_html: full HTML email with this structure:\n\n"
+        "    <h1>Daily Newsletter Briefing -- {today_date} ET</h1>\n"
+        "    <h2>Exec Summary</h2>\n"
+        "    <ul>[one bullet per story, concise]</ul>\n"
+        "    <hr>\n"
+        "    [For each story:]\n"
+        "    <h3>[category code] -- [category name]</h3>\n"
+        "    <p>[summary]<br>Source: <a href=\"[url]\">[url]</a> | Grade: X/10</p>\n"
+        "    <hr>\n"
+        "    <h3>LinkedIn Posts (queued in Buffer)</h3>\n"
+        "    [For each entry in linkedin_json where linkedin_pushed is true, render:]\n"
+        "    <p><strong>Sub-category [sub_category] — Top grade [top_grade]/10 — [stories_used] stor(y/ies) used</strong></p>\n"
+        "    <pre style=\"white-space:pre-wrap;font-size:13px\">[linkedin_post]</pre>\n"
+        "    <hr>\n"
+        "    <h3>Tweets</h3>\n"
+        "    <ul>\n"
+        "      [one <li> per non-empty tweet from tweets_json]\n"
+        "    </ul>\n"
+        "    <hr>\n"
+        "    <h3>Sources</h3>\n"
+        "    <ul>[one <li> per email: sender — subject]</ul>\n"
+        "    <p>{total_fetched} emails reviewed | {total_extracted} stories extracted | "
+        "{total_included} stories included (grade>=5)</p>\n\n"
+        "If stories_json is empty, send a brief email saying no stories qualified today."
+    ),
+    expected_output="Confirmation that the email was sent successfully.",
+    agent=email_composer,
+)
+
+# ─── Crew ─────────────────────────────────────────────────────────────────────
+
+def build_crew() -> Crew:
+    return Crew(
+        agents=[email_composer],
+        tasks=[task_email],
+        process=Process.sequential,
+        verbose=True,
+    )
