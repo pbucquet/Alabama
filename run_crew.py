@@ -207,6 +207,10 @@ if emails:
         )
 
     from config import get_categories, get_subcategories, get_all_codes
+    _grade_criteria = os.environ.get(
+        "GRADE_CRITERIA",
+        "business impact + novelty",
+    )
     _cats = get_categories()
     _subcats = get_subcategories()
     _codes = ",".join(get_all_codes())
@@ -243,7 +247,7 @@ if emails:
         f"{_subcat_lines}\n"
         f"    IMPORTANT: assign based on the PRIMARY subject of the story — "
         f"the most specific matching category wins.\n"
-        f"  - grade: integer 1-10 (business impact + novelty)\n"
+        f"  - grade: integer 1-10 ({_grade_criteria})\n"
         f"  - summary: factual summary, minimum 3 sentences and 60 words, maximum 120 words\n"
         f"  - source: URL from the email if available, else empty string\n"
         f"  - from_newsletter: sender name\n"
