@@ -468,9 +468,12 @@ linkedin_json = json.dumps([
 
 try:
     crew = build_crew()
+    email_subject_prefix = os.environ.get("EMAIL_SUBJECT_PREFIX", "Daily Newsletter Briefing")
+
     result = crew.kickoff(inputs={
         "today_date": today_et,
         "today_iso": today_iso,
+        "email_subject_prefix": email_subject_prefix,
         "stories_json": json.dumps(stories),
         "emails_json": json.dumps([
             {"from": e["from"], "subject": e["subject"]} for e in emails
