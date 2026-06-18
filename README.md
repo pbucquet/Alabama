@@ -7,8 +7,8 @@ Alabama reads your newsletter subscriptions every morning, extracts the most rel
 
 ## How it works
 
-1. **Fetch** — reads emails from an [AgentMail](https://agentmail.to) inbox since the last run
-2. **Extract** — GPT-4o parses all emails, grades stories 1–10 across 4 categories (AI, Blockchain/Crypto, Fintech, Consulting)
+1. **Fetch** — reads emails from an [AgentMail](https://agentmail.to) inbox since the last run, plus any URLs listed in `sources.md` (RSS feeds or web pages)
+2. **Extract** — GPT-4o parses all inputs, grades stories 1–10 across configurable categories (default: AI, Blockchain/Crypto, Fintech, Consulting)
 3. **Filter** — only grade ≥ 5 stories make it into the briefing email
 4. **Tweets** — GPT-4o writes 2 tweets for the top 2 stories, pushed to Buffer
 5. **LinkedIn** — Claude Sonnet writes one post from the best grade-9/10 stories, in your voice, pushed to Buffer
@@ -48,18 +48,29 @@ Alabama uses these files to write LinkedIn posts in your voice. The more specifi
 
 You can also add files in `context/companies/` for detailed company descriptions.
 
-### 4. Set up your AgentMail inbox
+### 4. Add web sources (optional)
+
+Copy the template and add URLs to fetch daily alongside your newsletters:
+
+```bash
+cp sources.md.example sources.md
+# Edit sources.md and add your URLs
+```
+
+Both RSS/Atom feeds and plain web pages are supported. RSS feeds are recommended — they are faster and give per-item publish dates so Alabama only extracts items since the last run. `sources.md` is gitignored so your list stays private.
+
+### 5. Set up your AgentMail inbox
 
 Create an inbox at [agentmail.to](https://agentmail.to) and subscribe your newsletters to it. Set `SENDER_INBOX_ID` in your `.env` to the inbox address.
 
-### 5. Run manually
+### 6. Run manually
 
 ```bash
 source venv/bin/activate
 python run_crew.py
 ```
 
-### 6. Schedule daily runs (cron)
+### 7. Schedule daily runs (cron)
 
 ```bash
 # Runs every day at 10:30 AM UTC — adjust to your timezone

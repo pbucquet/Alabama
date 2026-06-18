@@ -1,0 +1,16 @@
+# Web Sources
+
+<!-- Alabama fetches these URLs every day alongside newsletter emails.
+     Add one URL per line, with an optional label after " — ".
+     Both RSS/Atom feeds and plain web pages are supported.
+     Lines starting with # or <!-- are ignored. -->
+
+## RSS / Atom feeds (recommended — structured and fast)
+
+# - https://techcrunch.com/feed/ — TechCrunch
+# - https://www.theverge.com/rss/index.xml — The Verge
+# - https://feeds.feedburner.com/venturebeat/SZYF — VentureBeat
+
+## Web pages (scraped — best for pages without a feed)
+
+# - https://www.example.com/news — Example News

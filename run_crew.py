@@ -146,6 +146,17 @@ for thread in threads.threads:
 total_fetched = len(emails)
 log.info(f"Successfully read {total_fetched} emails")
 
+# ─── Step 2b: Fetch web sources ───────────────────────────────────────────────
+
+try:
+    from fetch_web_sources import fetch_web_sources
+    web_items = fetch_web_sources(since=since)
+    if web_items:
+        emails.extend(web_items)
+        log.info(f"Added {len(web_items)} item(s) from web sources — total inputs: {len(emails)}")
+except Exception as e:
+    log.warning(f"Web source fetch failed (non-fatal): {e}", exc_info=True)
+
 # ─── Step 3: Extract stories via GPT-4o ──────────────────────────────────────
 # GPT-4o returns ALL relevant stories (any grade).
 # Grade filtering happens in Python so we can count accurately.

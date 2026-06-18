@@ -9,3 +9,4 @@ __pycache__/
 last_run.json
 last_run.json.bak
 daily_brief_backup.json
+sources.md
