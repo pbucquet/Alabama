@@ -188,14 +188,26 @@ if emails:
             f"Body: {em['body_text'][:5000]}\n\n"
         )
 
+    from config import get_categories, get_subcategories, get_all_codes
+    _cats = get_categories()
+    _subcats = get_subcategories()
+    _codes = ",".join(get_all_codes())
+    _cat_lines = "\n".join(
+        f"      {k} = {v}" for k, v in _cats.items()
+    )
+    _subcat_lines = "\n".join(
+        f"      {k} = {v}" for k, v in _subcats.items()
+    )
+    _cat_names = ", ".join(_cats.values())
+
     # NOTE: Grade filter is intentionally removed from prompt.
     # We get all relevant stories and filter in Python for accurate counts.
     prompt = (
         f"You are a market intelligence analyst. Process ALL {len(emails)} emails below.\n"
         f"For each email, determine if it contains business news relevant to:\n"
-        f"AI, Blockchain/Crypto, Fintech/Insurtech, or Consulting.\n\n"
+        f"{_cat_names}.\n\n"
         f"CRITICAL — DECOMPOSE ROUNDUPS: If an email contains a list or roundup section "
-        f"(e.g. \'Top 5 AI Tools\', \'New & Trending\', \'This Week in AI\', bullet lists of products/news), "
+        f"(e.g. 'Top 5 AI Tools', 'New & Trending', 'This Week in AI', bullet lists of products/news), "
         f"extract EACH item as a SEPARATE story object. Do not collapse a list into one story.\n\n"
         f"INCLUSION BIAS: When in doubt, include. It is better to extract a grade-3 story "
         f"than to miss a grade-8 story. Only skip items that are clearly irrelevant "
@@ -203,26 +215,16 @@ if emails:
         f"PAY SPECIAL ATTENTION to:\n"
         f"  - New AI model launches or capability announcements (always extract)\n"
         f"  - New AI tools, products, or developer features (always extract, even if brief)\n"
-        f"  - Funding rounds for AI/crypto/fintech startups\n"
-        f"  - Enterprise AI deployments or partnerships\n\n"
+        f"  - Funding rounds for startups in these categories\n"
+        f"  - Enterprise deployments or partnerships\n\n"
         f"If RELEVANT: extract as a story object with these fields:\n"
-        f"  - category: one of 1A,1B,1C,1D,2A,2B,2C,2D,3A,3B,3C,3D,4A,4B,4C,4D\n"
+        f"  - category: one of {_codes}\n"
         f"    Parent categories — assign based on the PRIMARY SUBJECT of the story:\n"
-        f"      1 = AI & Machine Learning: AI models, LLMs, AI agents, AI tools, robotics, AI chips,\n"
-        f"          AI-powered products/features (e.g. a WhatsApp AI assistant → category 1)\n"
-        f"      2 = Blockchain & Crypto: stablecoins, DeFi, NFTs, Web3, crypto exchanges,\n"
-        f"          tokenisation, digital assets (e.g. a bank launching a stablecoin → category 2)\n"
-        f"      3 = Fintech & Insurtech: payments, neobanks, lending, insurance tech,\n"
-        f"          regtech — WITHOUT a blockchain/crypto angle\n"
-        f"      4 = Consulting & Professional Services: management consulting, advisory,\n"
-        f"          enterprise transformation, Big 4, MBB\n"
+        f"{_cat_lines}\n"
         f"    Sub-categories (letter):\n"
-        f"      A = New Products & Launches\n"
-        f"      B = Funding, M&A, Partnerships\n"
-        f"      C = Use Cases & Deployments\n"
-        f"      D = Business/Tech Impact & Trends\n"
-        f"    IMPORTANT: if a story is about AI being used inside a crypto/fintech product,\n"
-        f"    the PRIMARY subject wins — an AI agent for WhatsApp is category 1, not 2 or 3.\n"
+        f"{_subcat_lines}\n"
+        f"    IMPORTANT: assign based on the PRIMARY subject of the story — "
+        f"the most specific matching category wins.\n"
         f"  - grade: integer 1-10 (business impact + novelty)\n"
         f"  - summary: factual summary, minimum 3 sentences and 60 words, maximum 120 words\n"
         f"  - source: URL from the email if available, else empty string\n"

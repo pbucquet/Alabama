@@ -75,7 +75,7 @@ A separate cleanup script removes processed emails older than 7 days:
 
 ## Category system
 
-Stories are classified into 16 sub-categories:
+Stories are classified into a grid of parent categories × sub-categories. Both axes are fully configurable via `.env` — the defaults are:
 
 |  | A — New Products | B — Funding/M&A | C — Use Cases | D — Impact/Trends |
 |---|---|---|---|---|
@@ -84,7 +84,9 @@ Stories are classified into 16 sub-categories:
 | **3 — Fintech/Insurtech** | 3A | 3B | 3C | 3D |
 | **4 — Consulting** | 4A | 4B | 4C | 4D |
 
-LinkedIn post selection prioritises rarer categories: **4 > 3 > 2 > 1** — so a consulting story will always beat an AI story when counts are equal.
+To customise, set `STORY_CATEGORIES` and `STORY_SUBCATEGORIES` in your `.env` (see `.env.example` for the format). You can add, remove, or rename any category without touching the code.
+
+LinkedIn post selection prioritises rarer categories. By default: **4 > 3 > 2 > 1** — the last category in `STORY_CATEGORIES` always wins ties.
 
 ## Requirements
 

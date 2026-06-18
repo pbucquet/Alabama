@@ -26,6 +26,8 @@ ENV VARS required:
 ENV VARS optional:
   TWITTER_CHANNEL_ID    — Buffer channel ID for Twitter (tweet also pushed if set)
   CONTEXT_DIR           — Path to the author context/ dir (default: ./context inside this repo)
+  STORY_CATEGORIES      — Pipe-separated key:label pairs for parent categories (see config.py)
+  STORY_SUBCATEGORIES   — Pipe-separated key:label pairs for sub-categories (see config.py)
 """
 
 from __future__ import annotations
@@ -57,11 +59,15 @@ def select_stories(stories: list[dict]) -> list[dict]:
     - Tie-break: rarest category wins (4 > 3 > 2 > 1), then random within same parent
     - Return ALL stories in the winning sub-category
     """
-    # Step 1 — filter: grade 9-10, any category
+    from config import get_categories, get_priority_order
+    valid_cat_keys = set(get_categories().keys())
+    priority_order = get_priority_order()
+
+    # Step 1 — filter: grade 9-10, any configured category
     eligible = [
         s for s in stories
         if int(s.get("grade", 0)) >= 9
-        and str(s.get("category", "")).strip()[:1] in ("1", "2", "3", "4")
+        and str(s.get("category", "")).strip()[:1] in valid_cat_keys
     ]
 
     if not eligible:
@@ -92,12 +98,11 @@ def select_stories(stories: list[dict]) -> list[dict]:
         + f" | max={max_count} | tied winners={winners}"
     )
 
-    # Step 4 — tie-breaking: rarest parent category wins (4 > 3 > 2 > 1)
-    # Rationale: category 4 (Consulting) stories are rare — always prioritise them.
+    # Step 4 — tie-breaking: rarest category wins (last in STORY_CATEGORIES = highest priority)
     if len(winners) == 1:
         chosen_subcat = winners[0]
     else:
-        for priority_cat in ("4", "3", "2", "1"):
+        for priority_cat in priority_order:
             priority_winners = [w for w in winners if w.startswith(priority_cat)]
             if priority_winners:
                 chosen_subcat = random.choice(priority_winners)
