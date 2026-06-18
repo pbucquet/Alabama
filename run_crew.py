@@ -33,14 +33,15 @@ log = logging.getLogger(__name__)
 
 REQUIRED_ENV = [
     "OPENAI_API_KEY",
-    "AGENTMAIL_API_KEY",
-    "SENDER_INBOX_ID",
     "RECIPIENT_EMAIL",
     "SENDER_EMAIL",
     "SENDER_APP_PASSWORD",
-    "BUFFER_ACCESS_TOKEN",
-    "BUFFER_CHANNEL_ID",
 ]
+
+# Optional — Alabama runs without them but skips the relevant steps:
+#   AGENTMAIL_API_KEY + SENDER_INBOX_ID  → newsletter email fetch skipped
+#   BUFFER_ACCESS_TOKEN + BUFFER_CHANNEL_ID → tweet push skipped
+#   LINKEDIN_CHANNEL_ID                  → LinkedIn push skipped
 
 missing = [k for k in REQUIRED_ENV if not os.environ.get(k)]
 if missing:
@@ -100,7 +101,6 @@ log.info(f"Fetch window: {since.isoformat()} → now")
 # ─── Step 2: Fetch emails ─────────────────────────────────────────────────────
 
 import re
-from agentmail import AgentMail
 
 def strip_html(html: str) -> str:
     text = re.sub(r'<[^>]+>', ' ', html)
@@ -109,42 +109,49 @@ def strip_html(html: str) -> str:
 def clean_json(raw: str) -> str:
     return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
 
-client_am = AgentMail(api_key=os.environ["AGENTMAIL_API_KEY"])
-inbox_id = os.environ["SENDER_INBOX_ID"]
-
-threads = client_am.inboxes.threads.list(
-    inbox_id=inbox_id,
-    after=since,
-    limit=50,
-    include_spam=True,
-)
-log.info(f"Fetched {len(threads.threads)} email threads from AgentMail")
-
 emails = []
-for thread in threads.threads:
+agentmail_key = os.environ.get("AGENTMAIL_API_KEY", "")
+inbox_id = os.environ.get("SENDER_INBOX_ID", "")
+
+if agentmail_key and inbox_id:
     try:
-        detail = client_am.inboxes.threads.get(
+        from agentmail import AgentMail
+        client_am = AgentMail(api_key=agentmail_key)
+        threads = client_am.inboxes.threads.list(
             inbox_id=inbox_id,
-            thread_id=thread.thread_id,
+            after=since,
+            limit=50,
+            include_spam=True,
         )
-        msg = detail.messages[0] if detail.messages else None
-        if not msg:
-            continue
-        body = msg.text or ""
-        if not body and msg.html:
-            body = strip_html(msg.html)
-        body = clean_json(body)
-        emails.append({
-            "thread_id": thread.thread_id,
-            "subject": msg.subject or "(no subject)",
-            "from": msg.from_ or "",
-            "body_text": body[:6000],
-        })
+        log.info(f"Fetched {len(threads.threads)} email threads from AgentMail")
+        for thread in threads.threads:
+            try:
+                detail = client_am.inboxes.threads.get(
+                    inbox_id=inbox_id,
+                    thread_id=thread.thread_id,
+                )
+                msg = detail.messages[0] if detail.messages else None
+                if not msg:
+                    continue
+                body = msg.text or ""
+                if not body and msg.html:
+                    body = strip_html(msg.html)
+                body = clean_json(body)
+                emails.append({
+                    "thread_id": thread.thread_id,
+                    "subject": msg.subject or "(no subject)",
+                    "from": msg.from_ or "",
+                    "body_text": body[:6000],
+                })
+            except Exception as e:
+                log.warning(f"Error reading thread {thread.thread_id}: {e}")
+        log.info(f"Successfully read {len(emails)} emails")
     except Exception as e:
-        log.warning(f"Error reading thread {thread.thread_id}: {e}")
+        log.warning(f"AgentMail fetch failed (non-fatal): {e}", exc_info=True)
+else:
+    log.info("AGENTMAIL_API_KEY or SENDER_INBOX_ID not set — skipping newsletter email fetch")
 
 total_fetched = len(emails)
-log.info(f"Successfully read {total_fetched} emails")
 
 # ─── Step 2b: Fetch web sources ───────────────────────────────────────────────
 
@@ -405,7 +412,9 @@ def write_tweets(stories: list, oc) -> list:
 
 log.info("=== Step 4: Writing and pushing tweets ===")
 tweet_texts = []
-if stories:
+if not os.environ.get("BUFFER_ACCESS_TOKEN") or not os.environ.get("BUFFER_CHANNEL_ID"):
+    log.info("BUFFER_ACCESS_TOKEN or BUFFER_CHANNEL_ID not set — skipping tweets")
+elif stories:
     tweet_texts = write_tweets(stories, oc)
     pushed = 0
     for tweet in tweet_texts:
