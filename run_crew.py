@@ -412,15 +412,17 @@ def write_tweets(stories: list, oc) -> list:
 
 log.info("=== Step 4: Writing and pushing tweets ===")
 tweet_texts = []
-if not os.environ.get("BUFFER_ACCESS_TOKEN") or not os.environ.get("BUFFER_CHANNEL_ID"):
-    log.info("BUFFER_ACCESS_TOKEN or BUFFER_CHANNEL_ID not set — skipping tweets")
-elif stories:
+if stories:
     tweet_texts = write_tweets(stories, oc)
-    pushed = 0
-    for tweet in tweet_texts:
-        if push_tweet_to_buffer(tweet):
-            pushed += 1
-    log.info(f"Tweets: {len(tweet_texts)} written, {pushed} pushed to Buffer")
+    log.info(f"Tweets written: {len(tweet_texts)}")
+    if os.environ.get("BUFFER_ACCESS_TOKEN") and os.environ.get("BUFFER_CHANNEL_ID"):
+        pushed = 0
+        for tweet in tweet_texts:
+            if push_tweet_to_buffer(tweet):
+                pushed += 1
+        log.info(f"Tweets pushed to Buffer: {pushed}/{len(tweet_texts)}")
+    else:
+        log.info("BUFFER_CHANNEL_ID not set — tweets written but not pushed to Buffer")
 else:
     log.info("No stories — skipping tweets")
 
