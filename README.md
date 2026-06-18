@@ -33,12 +33,12 @@ cp .env.example .env
 ```
 
 **Required:**
-- `OPENAI_API_KEY` — GPT-4o for story extraction and tweet writing
-- `ANTHROPIC_API_KEY` — Claude Sonnet for LinkedIn posts
+- `OPENAI_API_KEY` — GPT-4o for story extraction, tweet writing, and LinkedIn posts (fallback)
 - `SENDER_EMAIL`, `SENDER_APP_PASSWORD`, `SENDER_SMTP_SERVER`, `SENDER_SMTP_PORT` — SMTP account for the briefing email
 - `RECIPIENT_EMAIL` — who receives the daily briefing
 
 **Optional (step is skipped if absent):**
+- `ANTHROPIC_API_KEY` — Claude Sonnet for LinkedIn posts; if absent, GPT-4o is used instead
 - `AGENTMAIL_API_KEY` + `SENDER_INBOX_ID` — newsletter inbox; leave blank if using web sources only
 - `BUFFER_ACCESS_TOKEN` + `BUFFER_CHANNEL_ID` — tweet publishing; leave blank to skip
 - `LINKEDIN_CHANNEL_ID` — LinkedIn publishing; leave blank to skip
@@ -117,7 +117,7 @@ LinkedIn post selection prioritises rarer categories. By default: **4 > 3 > 2 > 
 
 - Python 3.10+
 - OpenAI API key (GPT-4o) — required
-- Anthropic API key (Claude Sonnet) — required
 - An SMTP-enabled email account for sending the briefing — required
+- Anthropic API key (Claude Sonnet) — optional; GPT-4o is used for LinkedIn posts if absent
 - AgentMail account — optional (needed for newsletter email ingestion)
 - Buffer account with LinkedIn and/or Twitter channels connected — optional (needed for social publishing)

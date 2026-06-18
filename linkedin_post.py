@@ -19,7 +19,7 @@ POST WRITING:
 Called from run_crew.py after tweets (Step 4), before the briefing email (Step 5).
 
 ENV VARS required:
-  ANTHROPIC_API_KEY     — Claude Sonnet for post writing
+  ANTHROPIC_API_KEY     — Claude Sonnet for post writing (optional; falls back to GPT-4o)
   BUFFER_ACCESS_TOKEN   — Buffer OAuth token
   LINKEDIN_CHANNEL_ID   — Buffer channel ID for LinkedIn
 
@@ -197,7 +197,8 @@ def write_linkedin_post(
     author_context: str = "",
 ) -> dict:
     """
-    Call Claude Sonnet to write ONE LinkedIn post + tweet covering all selected stories.
+    Write ONE LinkedIn post + tweet covering all selected stories.
+    Uses Claude Sonnet if ANTHROPIC_API_KEY is set, otherwise falls back to GPT-4o.
 
     Args:
         stories: list of story dicts (already selected by select_stories())
@@ -206,10 +207,6 @@ def write_linkedin_post(
     Returns:
         dict with keys: linkedin_post (str), tweet (str)
     """
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-
     context_block = (
         f"ABOUT THE AUTHOR (voice, background, companies, positions):\n{author_context}\n\n---\n\n"
         if author_context
@@ -240,14 +237,31 @@ def write_linkedin_post(
         f"No preamble, no explanation, no markdown fences. Just the JSON object."
     )
 
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    use_anthropic = bool(anthropic_key)
+
     try:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1500,
-            timeout=40.0,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = response.content[0].text.strip()
+        if use_anthropic:
+            from anthropic import Anthropic
+            client = Anthropic(api_key=anthropic_key)
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=1500,
+                timeout=40.0,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = response.content[0].text.strip()
+            log.info("LinkedIn post written via Claude Sonnet")
+        else:
+            import openai
+            client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                max_tokens=1500,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = response.choices[0].message.content.strip()
+            log.info("LinkedIn post written via GPT-4o (ANTHROPIC_API_KEY not set)")
 
         # Strip markdown fences if present
         text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
