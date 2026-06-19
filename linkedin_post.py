@@ -195,18 +195,28 @@ def _build_stories_block(stories: list[dict]) -> str:
 def write_linkedin_post(
     stories: list[dict],
     author_context: str = "",
+    owned_source_labels: set | None = None,
 ) -> dict:
     """
     Write ONE LinkedIn post + tweet covering all selected stories.
     Uses Claude Sonnet if ANTHROPIC_API_KEY is set, otherwise falls back to GPT-4o.
+    If any selected story comes from an owned source, switches to first-person
+    promotional voice.
 
     Args:
         stories: list of story dicts (already selected by select_stories())
         author_context: concatenated markdown from the context/ dir
+        owned_source_labels: set of source labels that belong to the author
 
     Returns:
         dict with keys: linkedin_post (str), tweet (str)
     """
+    is_owned = any(
+        s.get("is_owned_source")
+        or (owned_source_labels and s.get("from_newsletter", "") in owned_source_labels)
+        for s in stories
+    )
+
     context_block = (
         f"ABOUT THE AUTHOR (voice, background, companies, positions):\n{author_context}\n\n---\n\n"
         if author_context
@@ -216,9 +226,24 @@ def write_linkedin_post(
     n = len(stories)
     stories_block = _build_stories_block(stories)
 
+    if is_owned:
+        voice_instruction = (
+            f"IMPORTANT — OWNED CONTENT MODE:\n"
+            f"The stor{'y' if n == 1 else 'ies'} below {'is' if n == 1 else 'are'} "
+            f"the author's OWN production (book, podcast, article, video, etc.).\n"
+            f"Write in FIRST PERSON ('I', 'my', 'me'). "
+            f"The goal is to promote the author's work warmly and personally — "
+            f"not as a news summary, but as an invitation to engage with their content.\n"
+            f"Keep the author's voice (see guidelines), stay personal and embodied, "
+            f"and avoid aggressive marketing language.\n\n"
+        )
+    else:
+        voice_instruction = ""
+
     prompt = (
         f"You are writing a LinkedIn post on behalf of the author described in the context below.\n\n"
         f"{context_block}"
+        f"{voice_instruction}"
         f"GUIDELINES:\n{_DEFAULT_GUIDELINES}\n\n"
         f"You have {n} stor{'y' if n == 1 else 'ies'} from the same news sub-category "
         f"to work with. Your task is to write ONE LinkedIn post that:\n"
@@ -229,7 +254,8 @@ def write_linkedin_post(
         f"{'STORY:' if n == 1 else 'STORIES:'}\n{stories_block}\n"
         f"INSTRUCTIONS:\n"
         f"1. Write the LinkedIn post following the guidelines exactly.\n"
-        f"2. Write a companion tweet: max 140 chars, no hashtags, punchy, "
+        f"2. Write a companion tweet: max 140 chars, "
+        f"{'first person, personal and inviting' if is_owned else 'no hashtags, punchy'}, "
         f"include one URL if available.\n\n"
         f"Return ONLY a valid JSON object with exactly two keys:\n"
         f'  "linkedin_post": string\n'
@@ -367,7 +393,7 @@ def _buffer_push(text: str, channel_id: str, label: str = "post") -> bool:
 
 # ─── Main entry point ─────────────────────────────────────────────────────────
 
-def generate_and_push_linkedin_posts(stories: list[dict]) -> list[dict]:
+def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: set | None = None) -> list[dict]:
     """
     Full pipeline: select → write → push.
 
@@ -410,7 +436,7 @@ def generate_and_push_linkedin_posts(stories: list[dict]) -> list[dict]:
         f"Writing LinkedIn post for sub-category '{sub_category}' "
         f"({len(selected)} stor{'y' if len(selected)==1 else 'ies'})…"
     )
-    post_data     = write_linkedin_post(selected, author_context=author_context)
+    post_data     = write_linkedin_post(selected, author_context=author_context, owned_source_labels=owned_source_labels)
     linkedin_post = post_data.get("linkedin_post", "").strip()
     tweet         = post_data.get("tweet", "").strip()
 

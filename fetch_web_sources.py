@@ -36,10 +36,19 @@ _MAX_RSS_ITEMS = 20
 
 # ─── sources.md parser ────────────────────────────────────────────────────────
 
-def load_sources(path: str | None = None) -> list[tuple[str, str]]:
+_OWNED_SECTION_MARKERS = (
+    "owned content",
+    "sources personnelles",
+    "personal",
+)
+
+def load_sources(path: str | None = None) -> list[tuple[str, str, bool]]:
     """
-    Parse sources.md and return a list of (url, label) tuples.
-    Lines that are commented out (starting with #) or HTML comments are skipped.
+    Parse sources.md and return a list of (url, label, is_owned) tuples.
+
+    is_owned is True for URLs found under a section whose heading contains
+    "owned content", "sources personnelles", or "personal" (case-insensitive).
+    Lines starting with # or <!-- are skipped.
     """
     if path is None:
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sources.md")
@@ -48,25 +57,39 @@ def load_sources(path: str | None = None) -> list[tuple[str, str]]:
         log.info(f"No sources.md found at '{path}' — skipping web sources.")
         return []
 
-    sources: list[tuple[str, str]] = []
+    sources: list[tuple[str, str, bool]] = []
+    in_owned_section = False
+
     with open(path, "r", encoding="utf-8") as f:
         for raw_line in f:
             line = raw_line.strip()
-            # Skip comments, headings, empty lines, HTML comment blocks
-            if not line or line.startswith("#") or line.startswith("<!--") or line.startswith("-->"):
+            if not line or line.startswith("<!--") or line.startswith("-->"):
+                continue
+            # Section headings (## or ###) — detect owned section
+            if line.startswith("##"):
+                heading_lower = line.lstrip("#").strip().lower()
+                in_owned_section = any(m in heading_lower for m in _OWNED_SECTION_MARKERS)
+                continue
+            # Skip comment lines
+            if line.startswith("#"):
                 continue
             # Must contain a URL
             url_match = re.search(r'https?://\S+', line)
             if not url_match:
                 continue
-            url = url_match.group(0).rstrip(")")  # strip trailing ) from markdown links
-            # Optional label after " — " or " - "
+            url = url_match.group(0).rstrip(")")
             label_match = re.search(r'(?:—|-)\s+(.+)$', line[url_match.end():])
             label = label_match.group(1).strip() if label_match else url
-            sources.append((url, label))
+            sources.append((url, label, in_owned_section))
 
-    log.info(f"Loaded {len(sources)} web source(s) from sources.md")
+    owned = sum(1 for _, _, o in sources if o)
+    log.info(f"Loaded {len(sources)} web source(s) from sources.md ({owned} owned)")
     return sources
+
+
+def get_owned_urls(path: str | None = None) -> set[str]:
+    """Return the set of URLs marked as owned content in sources.md."""
+    return {url for url, _, is_owned in load_sources(path) if is_owned}
 
 
 # ─── RSS / Atom fetcher ───────────────────────────────────────────────────────
@@ -167,6 +190,7 @@ def _make_item(
         "subject": title[:120] if title else "(no title)",
         "from": label,
         "body_text": body_text[:_MAX_BODY_CHARS],
+        "is_owned_source": False,  # set by caller
     }
 
 
@@ -186,6 +210,7 @@ def _fetch_html(url: str, label: str) -> dict | None:
             "subject": title[:120],
             "from": label,
             "body_text": text[:_MAX_BODY_CHARS],
+            "is_owned_source": False,  # set by caller
         }
     except Exception as e:
         log.warning(f"Failed to fetch '{url}': {e}")
@@ -211,8 +236,8 @@ def fetch_web_sources(
         return []
 
     results: list[dict] = []
-    for url, label in sources:
-        log.info(f"Fetching web source: {label} ({url})")
+    for url, label, is_owned in sources:
+        log.info(f"Fetching web source: {label} ({url}){' [OWNED]' if is_owned else ''}")
         try:
             resp = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT)
             resp.raise_for_status()
@@ -229,11 +254,14 @@ def fetch_web_sources(
 
             if is_feed:
                 items = _parse_rss(resp.text, label, since)
+                for item in items:
+                    item["is_owned_source"] = is_owned
                 log.info(f"  RSS: {len(items)} item(s) from '{label}'")
                 results.extend(items)
             else:
                 item = _fetch_html(url, label)
                 if item:
+                    item["is_owned_source"] = is_owned
                     log.info(f"  HTML: 1 page fetched from '{label}'")
                     results.append(item)
 

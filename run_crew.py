@@ -155,12 +155,20 @@ total_fetched = len(emails)
 
 # ─── Step 2b: Fetch web sources ───────────────────────────────────────────────
 
+owned_source_labels: set[str] = set()
 try:
-    from fetch_web_sources import fetch_web_sources
+    from fetch_web_sources import fetch_web_sources, get_owned_urls
     web_items = fetch_web_sources(since=since)
     if web_items:
         emails.extend(web_items)
-        log.info(f"Added {len(web_items)} item(s) from web sources — total inputs: {len(emails)}")
+        owned_source_labels = {
+            item["from"] for item in web_items if item.get("is_owned_source")
+        }
+        log.info(
+            f"Added {len(web_items)} item(s) from web sources — "
+            f"{len(owned_source_labels)} owned source label(s) — "
+            f"total inputs: {len(emails)}"
+        )
 except Exception as e:
     log.warning(f"Web source fetch failed (non-fatal): {e}", exc_info=True)
 
@@ -199,8 +207,9 @@ if emails:
     # Build email block for prompt
     email_text = ""
     for i, em in enumerate(emails):
+        owned_flag = " [OWNED CONTENT — written by the author themselves]" if em.get("is_owned_source") else ""
         email_text += (
-            f"EMAIL {i+1}:\n"
+            f"EMAIL {i+1}:{owned_flag}\n"
             f"From: {em['from'][:60]}\n"
             f"Subject: {em['subject'][:80]}\n"
             f"Body: {em['body_text'][:5000]}\n\n"
@@ -251,7 +260,8 @@ if emails:
         f"  - summary: factual summary, minimum 3 sentences and 60 words, maximum 120 words\n"
         f"  - source: URL from the email if available, else empty string\n"
         f"  - from_newsletter: sender name\n"
-        f"  - subject: email subject\n\n"
+        f"  - subject: email subject\n"
+        f"  - is_owned_source: true if the email was tagged [OWNED CONTENT], else false\n\n"
         f"Skip if source URL already in this list: {existing_sources[:20]}\n"
         f"Include ALL relevant stories regardless of grade — include grades 1 through 10.\n\n"
         f"Return ONLY a valid JSON array. No markdown, no explanation, no preamble.\n\n"
@@ -359,7 +369,7 @@ def push_tweet_to_buffer(tweet_text: str) -> bool:
         return False
 
 
-def write_tweets(stories: list, oc) -> list:
+def write_tweets(stories: list, oc, owned_source_labels: set | None = None) -> list:
     """Ask GPT-4o to write 2 tweets for the top 2 stories. Returns list of tweet strings."""
     if not stories:
         return []
@@ -369,9 +379,17 @@ def write_tweets(stories: list, oc) -> list:
         url = story.get("source", "")
         url_len = len(url) + 1  # +1 for the space before URL
         max_text_len = 140 - url_len if url else 140
+        is_owned = (
+            story.get("is_owned_source")
+            or (owned_source_labels and story.get("from_newsletter", "") in owned_source_labels)
+        )
+        if is_owned:
+            voice_rule = "- This is the author's OWN content. Write in first person ('I', 'my'). Tone: personal and inviting, promoting the author's work.\n"
+        else:
+            voice_rule = "- Factual and punchy. Third person. No hashtags. No emojis.\n"
         prompt = (
-            "Write a single tweet for this story. Rules:\n"
-            "- Factual and punchy. No hashtags. No emojis.\n"
+            f"Write a single tweet for this story. Rules:\n"
+            f"{voice_rule}"
             f"- End with the source URL: {url}\n"
             f"- HARD LIMIT: 140 characters TOTAL (URL included). "
             f"The URL alone is {url_len} chars, so your text before it must be "
@@ -417,7 +435,7 @@ def write_tweets(stories: list, oc) -> list:
 log.info("=== Step 4: Writing and pushing tweets ===")
 tweet_texts = []
 if stories:
-    tweet_texts = write_tweets(stories, oc)
+    tweet_texts = write_tweets(stories, oc, owned_source_labels=owned_source_labels)
     log.info(f"Tweets written: {len(tweet_texts)}")
     if os.environ.get("BUFFER_ACCESS_TOKEN") and os.environ.get("BUFFER_CHANNEL_ID"):
         pushed = 0
@@ -436,7 +454,7 @@ log.info("=== Step 4b: Generating LinkedIn post(s) from top stories ===")
 linkedin_results = []
 try:
     from linkedin_post import generate_and_push_linkedin_posts
-    linkedin_results = generate_and_push_linkedin_posts(stories)
+    linkedin_results = generate_and_push_linkedin_posts(stories, owned_source_labels=owned_source_labels)
     for lr in linkedin_results:
         status = "✓ pushed" if lr["linkedin_pushed"] else "✗ draft saved"
         story = lr.get('story', {})
