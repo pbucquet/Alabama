@@ -465,6 +465,22 @@ try:
 except Exception as e:
     log.error(f"LinkedIn post step failed: {e}", exc_info=True)
 
+# ─── Step 4c: Generate Instagram image + caption ─────────────────────────────
+
+log.info("=== Step 4c: Generating Instagram image and caption ===")
+instagram_result = None
+try:
+    from instagram_post import generate_and_push_instagram
+    instagram_result = generate_and_push_instagram(stories, owned_source_labels=owned_source_labels)
+    if instagram_result:
+        status = "✓ pushed" if instagram_result["instagram_pushed"] else "(not pushed)"
+        log.info(
+            f"Instagram [{status}] image={instagram_result['image_url'][:60]}… | "
+            f"caption={instagram_result['caption'][:60]}…"
+        )
+except Exception as e:
+    log.error(f"Instagram step failed: {e}", exc_info=True)
+
 # ─── Step 5: Send email via crew ──────────────────────────────────────────────
 
 from crew import build_crew
@@ -505,6 +521,13 @@ try:
         "total_included": str(len(stories)),
         "tweets_json": tweets_json,
         "linkedin_json": linkedin_json,
+        "instagram_json": json.dumps({
+            "image_url":         instagram_result["image_url"] if instagram_result else "",
+            "caption":           instagram_result["caption"] if instagram_result else "",
+            "dalle_prompt":      instagram_result["dalle_prompt"] if instagram_result else "",
+            "instagram_pushed":  instagram_result["instagram_pushed"] if instagram_result else False,
+            "instagram_enabled": instagram_result["instagram_enabled"] if instagram_result else False,
+        } if instagram_result else {}),
     })
     log.info("=== Crew completed successfully ===")
     log.info(f"Result: {str(result)[:300]}")
