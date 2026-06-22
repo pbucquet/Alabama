@@ -183,7 +183,7 @@ def _generate_image(dalle_prompt: str, oc) -> bytes:
         model="gpt-image-1",
         prompt=dalle_prompt,
         size="1024x1024",
-        quality="standard",
+        quality="medium",
         n=1,
     )
     image_bytes = base64.b64decode(response.data[0].b64_json)
