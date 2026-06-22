@@ -5,8 +5,8 @@ Pipeline:
   1. Load visual identity (context/image_style.md) + content-type logic
      (context/content_types.md)
   2. Ask GPT-4o to (a) pick the Instagram content type + artistic direction,
-     then (b) write a DALL-E 3 prompt applying both
-  3. Call DALL-E 3 to generate the image (1024×1024)
+     then (b) write an image generation prompt applying both
+  3. Call gpt-image-1 to generate the image (1024×1024, base64)
   4. Upload the image to Cloudinary (permanent public URL)
   5. Write an Instagram caption (Claude Sonnet or GPT-4o fallback)
   6. Push to Buffer (only if INSTAGRAM_ENABLED=true and INSTAGRAM_CHANNEL_ID is set)
@@ -26,6 +26,7 @@ ENV VARS optional:
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
@@ -174,26 +175,26 @@ def _generate_dalle_prompt(story: dict, image_style: str, brief: dict, oc) -> st
     return dalle_prompt
 
 
-# ─── DALL-E 3 image generation ────────────────────────────────────────────────
+# ─── Image generation (gpt-image-1) ──────────────────────────────────────────
 
-def _generate_image(dalle_prompt: str, oc) -> str:
-    """Call DALL-E 3 and return the temporary image URL."""
+def _generate_image(dalle_prompt: str, oc) -> bytes:
+    """Generate image with gpt-image-1 and return raw PNG bytes."""
     response = oc.images.generate(
-        model="dall-e-3",
+        model="gpt-image-1",
         prompt=dalle_prompt,
         size="1024x1024",
         quality="standard",
         n=1,
     )
-    url = response.data[0].url
-    log.info(f"DALL-E 3 image generated: {url[:80]}…")
-    return url
+    image_bytes = base64.b64decode(response.data[0].b64_json)
+    log.info(f"gpt-image-1 image generated ({len(image_bytes)} bytes)")
+    return image_bytes
 
 
 # ─── Cloudinary upload ────────────────────────────────────────────────────────
 
-def _upload_to_cloudinary(image_url: str) -> str:
-    """Upload a temporary image URL to Cloudinary and return the permanent URL."""
+def _upload_to_cloudinary(image_bytes: bytes) -> str:
+    """Upload raw image bytes to Cloudinary and return the permanent URL."""
     cloud_name  = os.environ["CLOUDINARY_CLOUD_NAME"]
     api_key     = os.environ["CLOUDINARY_API_KEY"]
     api_secret  = os.environ["CLOUDINARY_API_SECRET"]
@@ -206,13 +207,13 @@ def _upload_to_cloudinary(image_url: str) -> str:
     resp = requests.post(
         f"https://api.cloudinary.com/v1_1/{cloud_name}/image/upload",
         data={
-            "file": image_url,
             "timestamp": timestamp,
             "api_key": api_key,
             "signature": signature,
             "folder": folder,
         },
-        timeout=30,
+        files={"file": ("image.png", image_bytes, "image/png")},
+        timeout=60,
     )
     resp.raise_for_status()
     permanent_url = resp.json()["secure_url"]
