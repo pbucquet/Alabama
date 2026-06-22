@@ -68,6 +68,7 @@ task_email = Task(
         "    <p><strong>[if instagram_pushed: '✓ queued in Buffer' elif instagram_enabled: '✗ push failed' else '(push disabled — INSTAGRAM_ENABLED not set)']</strong></p>\n"
         "    <p><img src=\"[image_url]\" style=\"max-width:400px;border-radius:8px\"> </p>\n"
         "    <pre style=\"white-space:pre-wrap;font-size:13px\">[caption]</pre>\n"
+        "    <p style=\"color:#888;font-size:11px\">Format: [content_type] — [direction]</p>\n"
         "    <p style=\"color:#888;font-size:11px\">DALL-E prompt: [dalle_prompt]</p>\n"
         "    <hr>\n"
         "    <h3>Tweets</h3>\n"

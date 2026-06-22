@@ -15,6 +15,9 @@ and sends a daily HTML briefing email via SMTP.
 - `config.py` — parses `STORY_CATEGORIES` and `STORY_SUBCATEGORIES` from env
 - `cleanup_inbox.py` — removes processed AgentMail threads older than 7 days
 - `context/` — author voice/profile/topics markdown files (gitignored, private)
+  - `context/image_style.md` — visual identity (how the image should look)
+  - `context/content_types.md` — content-type logic (what kind of image to produce)
+- `instagram_post.py` — Instagram image + caption; uses image_style.md + content_types.md
 - `sources.md` — list of web URLs to fetch daily (gitignored, private)
 - `sources.md.example` — committed template for `sources.md`
 - `.env.example` — committed reference for all env vars

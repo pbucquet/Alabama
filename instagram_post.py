@@ -2,8 +2,10 @@
 instagram_post.py — Instagram image + caption generator for Alabama.
 
 Pipeline:
-  1. Load image style instructions from context/image_style.md
-  2. Ask GPT-4o to write a DALL-E 3 prompt based on the story + style
+  1. Load visual identity (context/image_style.md) + content-type logic
+     (context/content_types.md)
+  2. Ask GPT-4o to (a) pick the Instagram content type + artistic direction,
+     then (b) write a DALL-E 3 prompt applying both
   3. Call DALL-E 3 to generate the image (1024×1024)
   4. Upload the image to Cloudinary (permanent public URL)
   5. Write an Instagram caption (Claude Sonnet or GPT-4o fallback)
@@ -50,13 +52,24 @@ def _load_image_style() -> str:
         return f.read()
 
 
+def _load_content_types() -> str:
+    default_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "context")
+    context_dir = os.environ.get("CONTEXT_DIR", default_dir)
+    path = os.path.join(context_dir, "content_types.md")
+    if not os.path.isfile(path):
+        log.warning("context/content_types.md not found — skipping content-type guidance.")
+        return ""
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 def _load_author_context() -> str:
     default_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "context")
     context_dir = os.environ.get("CONTEXT_DIR", default_dir)
     chunks: list[str] = []
     for root, _, files in os.walk(context_dir):
         for fname in sorted(files):
-            if fname.endswith(".md") and fname != "image_style.md":
+            if fname.endswith(".md") and fname not in ("image_style.md", "content_types.md"):
                 path = os.path.join(root, fname)
                 with open(path, "r", encoding="utf-8") as f:
                     rel = os.path.relpath(path, context_dir)
@@ -66,15 +79,81 @@ def _load_author_context() -> str:
 
 # ─── DALL-E prompt generator ──────────────────────────────────────────────────
 
-def _generate_dalle_prompt(story: dict, image_style: str, oc) -> str:
-    """Ask GPT-4o to write a DALL-E 3 prompt for this story."""
-    style_block = f"IMAGE STYLE GUIDELINES:\n{image_style}\n\n" if image_style else ""
+def _select_content_brief(story: dict, content_types: str, oc) -> dict:
+    """Step 1 — pick the Instagram content type, artistic direction and brief.
+
+    Uses content_types.md to decide *what kind of image* to produce for this
+    story on Instagram. Returns a dict with keys: content_type, direction,
+    text_level, human_figures, visual_idea. Falls back to a sensible default
+    if content_types.md is absent or the model returns malformed output.
+    """
+    if not content_types:
+        return {
+            "content_type": "Instagram short reflection post",
+            "direction": "Direction 1 — Cabinet d'étude",
+            "text_level": "none",
+            "human_figures": "no",
+            "visual_idea": "",
+        }
+
+    prompt = (
+        f"CONTENT-TYPE DECISION GUIDE:\n{content_types}\n\n"
+        f"You are choosing how to illustrate a daily NEWS story on INSTAGRAM only.\n"
+        f"Using the guide above, decide the best approach for this story.\n\n"
+        f"STORY:\n"
+        f"Category : {story.get('category', '')}\n"
+        f"Subject  : {story.get('subject', '')}\n"
+        f"Summary  : {story.get('summary', '')}\n\n"
+        f"Return ONLY a JSON object with these keys:\n"
+        f'  "content_type"  : the chosen Instagram content type from the guide\n'
+        f'  "direction"     : the chosen artistic direction (1, 2, 3 or 4) with its name\n'
+        f'  "text_level"    : "none", "low", "medium" or "high"\n'
+        f'  "human_figures" : "yes", "no" or "subtle"\n'
+        f'  "visual_idea"   : one sentence describing the symbolic visual concept\n'
+    )
+    try:
+        resp = oc.chat.completions.create(
+            model="gpt-4o",
+            max_tokens=300,
+            response_format={"type": "json_object"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        brief = json.loads(resp.choices[0].message.content)
+        log.info(
+            f"Instagram brief: {brief.get('content_type')} / {brief.get('direction')} / "
+            f"text={brief.get('text_level')} / figures={brief.get('human_figures')}"
+        )
+        return brief
+    except Exception as e:
+        log.warning(f"Content-type selection failed ({e}) — using default brief.")
+        return {
+            "content_type": "Instagram short reflection post",
+            "direction": "Direction 1 — Cabinet d'étude",
+            "text_level": "none",
+            "human_figures": "no",
+            "visual_idea": "",
+        }
+
+
+def _generate_dalle_prompt(story: dict, image_style: str, brief: dict, oc) -> str:
+    """Step 2 — write a DALL-E 3 prompt applying the visual identity + brief."""
+    style_block = f"VISUAL IDENTITY GUIDELINES:\n{image_style}\n\n" if image_style else ""
+    brief_block = (
+        f"CONTENT BRIEF FOR THIS IMAGE (decided from the content-type guide):\n"
+        f"- Content type   : {brief.get('content_type', '')}\n"
+        f"- Artistic dir.  : {brief.get('direction', '')}\n"
+        f"- Text in image  : {brief.get('text_level', 'none')}\n"
+        f"- Human figures  : {brief.get('human_figures', 'no')}\n"
+        f"- Visual idea    : {brief.get('visual_idea', '')}\n\n"
+    )
     prompt = (
         f"{style_block}"
+        f"{brief_block}"
         f"Write a DALL-E 3 image generation prompt for an Instagram post about the following story.\n\n"
         f"RULES:\n"
         f"- The image must be symbolic and evocative, NOT a literal illustration of the news.\n"
-        f"- Follow the style guidelines above precisely.\n"
+        f"- Apply the chosen artistic direction and visual identity above precisely.\n"
+        f"- Honour the content brief: composition, emotional intensity and whether human figures appear.\n"
         f"- Write the prompt in English (DALL-E works best in English).\n"
         f"- The prompt must be a single paragraph of 40–80 words.\n"
         f"- Do NOT include any text or words inside the image.\n"
@@ -277,7 +356,7 @@ def generate_and_push_instagram(
     Returns a result dict or None if skipped.
 
     Result dict keys:
-      story, dalle_prompt, image_url, caption,
+      story, content_type, direction, dalle_prompt, image_url, caption,
       instagram_pushed, instagram_enabled
     """
     if not stories:
@@ -301,20 +380,24 @@ def generate_and_push_instagram(
         or (owned_source_labels and story.get("from_newsletter", "") in owned_source_labels)
     )
 
-    image_style   = _load_image_style()
+    image_style    = _load_image_style()
+    content_types  = _load_content_types()
     author_context = _load_author_context()
 
     try:
-        # 1. Generate DALL-E prompt
-        dalle_prompt = _generate_dalle_prompt(story, image_style, oc)
+        # 1. Decide content type + artistic direction (content_types.md)
+        brief = _select_content_brief(story, content_types, oc)
 
-        # 2. Generate image
+        # 2. Generate DALL-E prompt (image_style.md + brief)
+        dalle_prompt = _generate_dalle_prompt(story, image_style, brief, oc)
+
+        # 3. Generate image
         temp_url = _generate_image(dalle_prompt, oc)
 
-        # 3. Upload to Cloudinary
+        # 4. Upload to Cloudinary
         permanent_url = _upload_to_cloudinary(temp_url)
 
-        # 4. Write caption
+        # 5. Write caption
         caption = _write_caption(story, author_context, is_owned, oc)
         log.info(f"Instagram caption ({len(caption)} chars):\n{caption[:200]}…")
 
@@ -322,7 +405,7 @@ def generate_and_push_instagram(
         log.error(f"Instagram generation failed: {e}", exc_info=True)
         return None
 
-    # 5. Push to Buffer (only if enabled)
+    # 6. Push to Buffer (only if enabled)
     instagram_enabled = os.environ.get("INSTAGRAM_ENABLED", "false").lower() == "true"
     channel_id = os.environ.get("INSTAGRAM_CHANNEL_ID", "")
     instagram_pushed = False
@@ -336,6 +419,8 @@ def generate_and_push_instagram(
 
     return {
         "story":               story,
+        "content_type":        brief.get("content_type", ""),
+        "direction":           brief.get("direction", ""),
         "dalle_prompt":        dalle_prompt,
         "image_url":           permanent_url,
         "caption":             caption,
