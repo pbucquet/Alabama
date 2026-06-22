@@ -64,13 +64,26 @@ def _load_content_types() -> str:
         return f.read()
 
 
+def _load_text_guidelines() -> str:
+    default_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "context")
+    context_dir = os.environ.get("CONTEXT_DIR", default_dir)
+    path = os.path.join(context_dir, "instagram_text_guidelines.md")
+    if not os.path.isfile(path):
+        log.warning("context/instagram_text_guidelines.md not found — using default caption rules.")
+        return ""
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 def _load_author_context() -> str:
     default_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "context")
     context_dir = os.environ.get("CONTEXT_DIR", default_dir)
     chunks: list[str] = []
     for root, _, files in os.walk(context_dir):
         for fname in sorted(files):
-            if fname.endswith(".md") and fname not in ("image_style.md", "content_types.md"):
+            if fname.endswith(".md") and fname not in (
+                "image_style.md", "content_types.md", "instagram_text_guidelines.md"
+            ):
                 path = os.path.join(root, fname)
                 with open(path, "r", encoding="utf-8") as f:
                     rel = os.path.relpath(path, context_dir)
@@ -226,35 +239,37 @@ def _upload_to_cloudinary(image_bytes: bytes) -> str:
 def _write_caption(
     story: dict,
     author_context: str,
+    text_guidelines: str,
     is_owned: bool,
     oc,
 ) -> str:
-    """Write an Instagram caption for the story."""
+    """Write an Instagram caption following instagram_text_guidelines.md."""
+    guidelines_block = (
+        f"INSTAGRAM CAPTION GUIDELINES:\n{text_guidelines}\n\n---\n\n"
+        if text_guidelines else ""
+    )
     context_block = (
         f"ABOUT THE AUTHOR:\n{author_context}\n\n---\n\n" if author_context else ""
     )
     if is_owned:
         voice_note = (
-            "This is the author's OWN content. Write in first person ('I', 'my'). "
-            "Warm, personal, and inviting — promoting the author's work without aggressive marketing.\n"
+            "This is the author's OWN content. Write in first person ('je', 'mon', 'ma'). "
+            "Warm, personal, and inviting — promote the author's work without aggressive marketing."
         )
     else:
         voice_note = (
-            "Write as an observer sharing a thoughtful reflection on this story. "
-            "Third person, contemplative, no corporate language.\n"
+            "Write as a thoughtful reflective voice connected to the author's universe. "
+            "Third person or universal 'on/nous', contemplative, no corporate language."
         )
 
     prompt = (
+        f"{guidelines_block}"
         f"{context_block}"
         f"Write an Instagram caption for the following story.\n\n"
-        f"RULES:\n"
-        f"- {voice_note}"
-        f"- Maximum 150 words.\n"
-        f"- Short paragraphs, breathing rhythm.\n"
-        f"- 3 to 5 relevant hashtags at the very end.\n"
-        f"- No engagement-bait questions.\n"
-        f"- No 'game-changer', 'revolutionary', 'disruptive', 'excited to share'.\n"
-        f"- Match the language of the story (French or English).\n"
+        f"VOICE NOTE: {voice_note}\n\n"
+        f"ADDITIONAL RULES:\n"
+        f"- Follow the guidelines above precisely for tone, structure, length and hashtags.\n"
+        f"- Do NOT summarise the news — extract the psychological or symbolic question behind it.\n"
         f"- Return ONLY the caption text, nothing else.\n\n"
         f"STORY:\n"
         f"Subject : {story.get('subject', '')}\n"
@@ -381,9 +396,10 @@ def generate_and_push_instagram(
         or (owned_source_labels and story.get("from_newsletter", "") in owned_source_labels)
     )
 
-    image_style    = _load_image_style()
-    content_types  = _load_content_types()
-    author_context = _load_author_context()
+    image_style      = _load_image_style()
+    content_types    = _load_content_types()
+    text_guidelines  = _load_text_guidelines()
+    author_context   = _load_author_context()
 
     try:
         # 1. Decide content type + artistic direction (content_types.md)
@@ -399,7 +415,7 @@ def generate_and_push_instagram(
         permanent_url = _upload_to_cloudinary(temp_url)
 
         # 5. Write caption
-        caption = _write_caption(story, author_context, is_owned, oc)
+        caption = _write_caption(story, author_context, text_guidelines, is_owned, oc)
         log.info(f"Instagram caption ({len(caption)} chars):\n{caption[:200]}…")
 
     except Exception as e:
