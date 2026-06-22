@@ -434,16 +434,20 @@ def write_tweets(stories: list, oc, owned_source_labels: set | None = None) -> l
 
 log.info("=== Step 4: Writing and pushing tweets ===")
 tweet_texts = []
+tweet_push_results = []  # parallel list: True/False per tweet
 if stories:
     tweet_texts = write_tweets(stories, oc, owned_source_labels=owned_source_labels)
     log.info(f"Tweets written: {len(tweet_texts)}")
     if os.environ.get("BUFFER_ACCESS_TOKEN") and os.environ.get("BUFFER_CHANNEL_ID"):
         pushed = 0
         for tweet in tweet_texts:
-            if push_tweet_to_buffer(tweet):
+            ok = push_tweet_to_buffer(tweet)
+            tweet_push_results.append(ok)
+            if ok:
                 pushed += 1
         log.info(f"Tweets pushed to Buffer: {pushed}/{len(tweet_texts)}")
     else:
+        tweet_push_results = [False] * len(tweet_texts)
         log.info("BUFFER_CHANNEL_ID not set — tweets written but not pushed to Buffer")
 else:
     log.info("No stories — skipping tweets")
@@ -486,8 +490,10 @@ except Exception as e:
 from crew import build_crew
 
 tweets_json = json.dumps({
-    "tweet1": tweet_texts[0] if len(tweet_texts) > 0 else "",
-    "tweet2": tweet_texts[1] if len(tweet_texts) > 1 else "",
+    "tweet1":        tweet_texts[0] if len(tweet_texts) > 0 else "",
+    "tweet1_pushed": tweet_push_results[0] if len(tweet_push_results) > 0 else False,
+    "tweet2":        tweet_texts[1] if len(tweet_texts) > 1 else "",
+    "tweet2_pushed": tweet_push_results[1] if len(tweet_push_results) > 1 else False,
 })
 
 # linkedin_results is a list of 0 or 1 dicts (one post per day)
