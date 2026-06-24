@@ -5,11 +5,15 @@ All attribute names verified against live AgentMail SDK responses.
 
 import os
 import re
+import sys
 import json
 import requests
 from datetime import datetime, timezone, timedelta
 from crewai.tools import BaseTool
 from agentmail import AgentMail
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
+from shared.tools.buffer_tool import PushTweetToBufferTool  # noqa: F401 — re-exported
 
 
 def get_client() -> AgentMail:
@@ -182,96 +186,4 @@ class SaveStateTool(BaseTool):
         return f"State saved. {len(stories)} stories on disk."
 
 
-class PushTweetToBufferTool(BaseTool):
-    name: str = "push_tweet_to_buffer"
-    description: str = (
-        "Pushes a single tweet to Buffer's queue via GraphQL API. "
-        "Input must be a JSON string with key: text (str, max 140 chars including URL). "
-        "On success returns confirmation. On failure saves draft to tweets_draft.txt."
-    )
-
-    def _graphql(self, query: str, token: str) -> dict:
-        """Execute a Buffer GraphQL query/mutation."""
-        try:
-            response = requests.post(
-                "https://api.buffer.com",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {token}",
-                },
-                json={"query": query},
-                timeout=15,
-            )
-            return response.json()
-        except Exception as e:
-            return {"error": str(e)}
-
-    def _run(self, payload: str) -> str:
-        try:
-            data = json.loads(clean_json(payload))
-            tweet_text = data.get("text", "").strip()
-        except (json.JSONDecodeError, KeyError) as e:
-            return f"Error parsing tweet payload: {str(e)}"
-
-        if not tweet_text:
-            return "Error: tweet text is empty."
-
-        if len(tweet_text) > 140:
-            return f"Error: tweet is {len(tweet_text)} characters, exceeds 140 limit. Shorten it."
-
-        token = os.environ.get("BUFFER_ACCESS_TOKEN", "")
-        channel_id = os.environ.get("BUFFER_CHANNEL_ID", "")
-
-        if not token or not channel_id:
-            return "Error: BUFFER_ACCESS_TOKEN or BUFFER_CHANNEL_ID not set in environment."
-
-        # Escape tweet text for GraphQL
-        tweet_escaped = json.dumps(tweet_text)
-
-        mutation = f"""
-        mutation CreatePost {{
-          createPost(input: {{
-            text: {tweet_escaped},
-            channelId: "{channel_id}",
-            schedulingType: automatic,
-            mode: addToQueue
-          }}) {{
-            ... on PostActionSuccess {{
-              post {{
-                id
-              }}
-            }}
-            ... on MutationError {{
-              message
-            }}
-          }}
-        }}
-        """
-
-        try:
-            result = self._graphql(mutation, token)
-
-            # Surface any top-level GraphQL errors
-            if "error" in result:
-                raise Exception(result["error"])
-            if result.get("errors"):
-                raise Exception(json.dumps(result["errors"]))
-
-            post_result = result.get("data", {}).get("createPost", {})
-
-            if post_result.get("post", {}).get("id"):
-                post_id = post_result["post"]["id"]
-                return (
-                    f"Tweet queued successfully in Buffer. "
-                    f"Post ID: {post_id} | Text: {tweet_text}"
-                )
-            else:
-                error_msg = post_result.get("message", json.dumps(result))
-                raise Exception(error_msg)
-
-        except Exception as e:
-            # Save draft on failure
-            draft_path = os.path.join(os.path.dirname(__file__), "tweets_draft.txt")
-            with open(draft_path, "a") as f:
-                f.write(f"{datetime.now().isoformat()} | {tweet_text}\n")
-            return f"Buffer GraphQL error: {str(e)}. Draft saved to tweets_draft.txt."
+# PushTweetToBufferTool is imported from shared.tools.buffer_tool above.

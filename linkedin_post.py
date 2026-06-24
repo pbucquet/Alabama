@@ -37,9 +37,12 @@ import logging
 import os
 import random
 import re
-import subprocess
+import sys
 from collections import defaultdict
 from datetime import datetime, timezone
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
+from shared.tools.buffer_tool import push_to_buffer as _push_to_buffer_shared
 
 log = logging.getLogger(__name__)
 
@@ -324,71 +327,10 @@ def write_linkedin_post(
 # ─── Buffer push ──────────────────────────────────────────────────────────────
 
 def _buffer_push(text: str, channel_id: str, label: str = "post") -> bool:
-    """Push text to a Buffer channel via GraphQL. Returns True on success."""
-    token = os.environ.get("BUFFER_ACCESS_TOKEN", "")
-    if not token or not channel_id:
-        log.error(f"Cannot push {label}: BUFFER_ACCESS_TOKEN or channel_id missing.")
-        return False
-
-    text_json  = json.dumps(text)
-    mutation   = f"""
-    mutation CreatePost {{
-      createPost(input: {{
-        text: {text_json},
-        channelId: "{channel_id}",
-        schedulingType: automatic,
-        mode: addToQueue
-      }}) {{
-        ... on PostActionSuccess {{
-          post {{ id }}
-        }}
-        ... on MutationError {{
-          message
-        }}
-      }}
-    }}
-    """
-    try:
-        try:
-            import requests as req_lib
-            resp = req_lib.post(
-                "https://api.buffer.com",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {token}",
-                },
-                json={"query": mutation},
-                timeout=15,
-            )
-            data = resp.json()
-        except ImportError:
-            proc = subprocess.run(
-                ["curl", "-s", "-X", "POST", "https://api.buffer.com",
-                 "-H", "Content-Type: application/json",
-                 "-H", f"Authorization: Bearer {token}",
-                 "-d", json.dumps({"query": mutation})],
-                capture_output=True, text=True, timeout=15,
-            )
-            data = json.loads(proc.stdout)
-
-        if data.get("errors"):
-            raise Exception(json.dumps(data["errors"]))
-
-        post_result = data.get("data", {}).get("createPost", {})
-        if post_result.get("post", {}).get("id"):
-            log.info(f"Buffer {label} queued — ID: {post_result['post']['id']}")
-            return True
-        raise Exception(post_result.get("message", json.dumps(data)))
-
-    except Exception as e:
-        log.error(f"Buffer push failed ({label}): {e}")
-        draft_path = os.path.join(os.path.dirname(__file__), "linkedin_drafts.txt")
-        with open(draft_path, "a") as f:
-            f.write(f"\n{'='*60}\n")
-            f.write(f"{datetime.now(timezone.utc).isoformat()} [{label}]\n")
-            f.write(f"{text}\n")
-        log.info("Draft saved to linkedin_drafts.txt for manual recovery.")
-        return False
+    """Push text to a Buffer channel. Delegates to shared implementation."""
+    token      = os.environ.get("BUFFER_ACCESS_TOKEN", "")
+    draft_path = os.path.join(os.path.dirname(__file__), "linkedin_drafts.txt")
+    return _push_to_buffer_shared(text, channel_id, token, label=label, draft_path=draft_path)
 
 
 # ─── Main entry point ─────────────────────────────────────────────────────────
