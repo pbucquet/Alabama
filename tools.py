@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from crewai.tools import BaseTool
 from agentmail import AgentMail
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from shared.tools.buffer_tool import PushTweetToBufferTool  # noqa: F401 — re-exported
 
 

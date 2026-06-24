@@ -41,7 +41,7 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "shared"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from shared.tools.buffer_tool import push_to_buffer as _push_to_buffer_shared
 
 log = logging.getLogger(__name__)
