@@ -37,12 +37,13 @@ import logging
 import os
 import random
 import re
-import sys
+import importlib.util as _ilu
 from collections import defaultdict
 from datetime import datetime, timezone
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from shared.tools.buffer_tool import push_to_buffer as _push_to_buffer_shared
+_bt = _ilu.spec_from_file_location("buffer_tool", os.path.join(os.path.dirname(__file__), "..", "shared", "tools", "buffer_tool.py"))
+_bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
+_push_to_buffer_shared = _bm.push_to_buffer
 
 log = logging.getLogger(__name__)
 

@@ -5,15 +5,16 @@ All attribute names verified against live AgentMail SDK responses.
 
 import os
 import re
-import sys
+import importlib.util as _ilu
 import json
 import requests
 from datetime import datetime, timezone, timedelta
 from crewai.tools import BaseTool
 from agentmail import AgentMail
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from shared.tools.buffer_tool import PushTweetToBufferTool  # noqa: F401 — re-exported
+_bt = _ilu.spec_from_file_location("buffer_tool", os.path.join(os.path.dirname(__file__), "..", "shared", "tools", "buffer_tool.py"))
+_bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
+PushTweetToBufferTool = _bm.PushTweetToBufferTool
 
 
 def get_client() -> AgentMail:
