@@ -359,6 +359,46 @@ def _push_to_buffer(caption: str, image_url: str, channel_id: str) -> bool:
         return False
 
 
+# ─── Deduplication ───────────────────────────────────────────────────────────
+
+_POSTED_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instagram_posted.json")
+_POSTED_MAX_DAYS = 30  # forget URLs older than this
+
+
+def _load_posted_urls() -> dict:
+    """Return {url: iso_date_str} for recently posted stories."""
+    if not os.path.isfile(_POSTED_LOG):
+        return {}
+    with open(_POSTED_LOG, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_posted_url(url: str) -> None:
+    """Record a URL as posted today."""
+    posted = _load_posted_urls()
+    cutoff = datetime.now(timezone.utc).timestamp() - _POSTED_MAX_DAYS * 86400
+    # prune old entries
+    posted = {u: d for u, d in posted.items()
+              if datetime.fromisoformat(d).timestamp() > cutoff}
+    posted[url] = datetime.now(timezone.utc).isoformat()
+    with open(_POSTED_LOG, "w", encoding="utf-8") as f:
+        json.dump(posted, f, indent=2)
+
+
+def _select_story(stories: list[dict]) -> dict:
+    """Pick the highest-graded story whose URL hasn't been posted recently."""
+    posted = _load_posted_urls()
+    ranked = sorted(stories, key=lambda s: int(s.get("grade", 0)), reverse=True)
+    for s in ranked:
+        url = s.get("url", "")
+        if url not in posted:
+            log.info(f"Instagram story selected: grade={s.get('grade')} | {s.get('subject','')[:70]}")
+            return s
+    # all stories already posted — fall back to top story and log a warning
+    log.warning("Instagram: all stories have been posted recently — reusing top story.")
+    return ranked[0]
+
+
 # ─── Main entry point ─────────────────────────────────────────────────────────
 
 def generate_and_push_instagram(
@@ -388,8 +428,8 @@ def generate_and_push_instagram(
     import openai
     oc = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-    # Pick the top story (same one LinkedIn would pick if it had to pick one)
-    story = max(stories, key=lambda s: int(s.get("grade", 0)))
+    # Pick the highest-graded story not already posted to Instagram
+    story = _select_story(stories)
 
     is_owned = (
         story.get("is_owned_source")
@@ -417,6 +457,9 @@ def generate_and_push_instagram(
         # 5. Write caption
         caption = _write_caption(story, author_context, text_guidelines, is_owned, oc)
         log.info(f"Instagram caption ({len(caption)} chars):\n{caption[:200]}…")
+
+        # Mark this story URL as used so it won't be picked again for 30 days
+        _save_posted_url(story.get("url", ""))
 
     except Exception as e:
         log.error(f"Instagram generation failed: {e}", exc_info=True)
