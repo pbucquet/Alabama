@@ -67,6 +67,17 @@ Config parsing lives in `config.py` — import from there, never hardcode catego
 ## EC2 deployment
 - EC2 host: `ubuntu@34.237.132.163` (key: `~/.ssh/crewAI.pem`)
 - Repo path on EC2: `/home/ubuntu/alabama`
+- Venv: `/home/ubuntu/alabama/venv/` (Alabama's own, fully independent)
 - To deploy: push to GitHub, then `ssh -i ~/.ssh/crewAI.pem ubuntu@34.237.132.163 "cd /home/ubuntu/alabama && git pull origin main"`
 - Do not edit files directly on EC2
-- Cron: `30 10 * * *` (10:30 UTC) for `run_crew.py`, `0 11 * * *` for `cleanup_inbox.py`
+- Cron: `30 10 * * *` (10:30 UTC) for `run_crew.py`, `11 11 * * *` for `cleanup_inbox.py`
+
+## EC2 context symlinks (Patrick's voice — do not commit these files)
+- `context/profile.md` → `/home/ubuntu/sophie/context/patrick_profile.md`
+- `context/voice_and_tone.md` → `/home/ubuntu/sophie/context/voice_and_tone.md`
+- `context/topics_and_positions.md` → `/home/ubuntu/sophie/context/topics_and_positions.md`
+- Updates to Sophie's context files are automatically picked up by Alabama
+
+## Other EC2 agents — do not touch
+- `/home/ubuntu/Justine/` — separate Alabama deployment for a different user (Justine), own venv, own .env, own context. Leave it alone.
+- `/home/ubuntu/newsletter-crew/` — decommissioned (no cron, no venv). Exists as reference only.
