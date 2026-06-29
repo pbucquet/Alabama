@@ -337,7 +337,33 @@ def write_linkedin_post(
         return result
 
     except Exception as e:
-        log.error(f"LinkedIn post generation failed: {e}", exc_info=True)
+        if use_anthropic:
+            # Anthropic call failed — fall back to GPT-4o if key is available
+            log.warning(f"Claude Sonnet failed ({e}) — falling back to GPT-4o.")
+            try:
+                import openai
+                client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    max_tokens=1500,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                text = response.choices[0].message.content.strip()
+                log.info("LinkedIn post written via GPT-4o (Anthropic fallback).")
+                text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+                text = re.sub(r"\s*```$", "", text).strip()
+                start = text.find("{")
+                end   = text.rfind("}") + 1
+                if start != -1 and end > start:
+                    text = text[start:end]
+                result = json.loads(text)
+                result.setdefault("linkedin_post", text)
+                result.setdefault("tweet", "")
+                return result
+            except Exception as e2:
+                log.error(f"GPT-4o fallback also failed: {e2}", exc_info=True)
+        else:
+            log.error(f"LinkedIn post generation failed: {e}", exc_info=True)
         return {"linkedin_post": "", "tweet": ""}
 
 
