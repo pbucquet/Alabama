@@ -67,12 +67,28 @@ def select_stories(stories: list[dict]) -> list[dict]:
     valid_cat_keys = set(get_categories().keys())
     priority_order = get_priority_order()
 
-    # Step 1 — filter: grade 9-10, any configured category
+    # Step 1 — filter: grade 9-10, any configured category, source URL required (hard rule)
+    def _has_source(s: dict) -> bool:
+        src = str(s.get("source", "")).strip().lower()
+        return bool(src) and src not in ("not available", "n/a", "none", "null")
+
     eligible = [
         s for s in stories
         if int(s.get("grade", 0)) >= 9
         and str(s.get("category", "")).strip()[:1] in valid_cat_keys
+        and _has_source(s)
     ]
+
+    no_source_count = sum(
+        1 for s in stories
+        if int(s.get("grade", 0)) >= 9
+        and not _has_source(s)
+    )
+    if no_source_count:
+        log.info(
+            f"LinkedIn selection: {no_source_count} grade-9/10 story/stories excluded "
+            "— no source URL (hard rule: no source, no LinkedIn post)."
+        )
 
     if not eligible:
         log.info(
