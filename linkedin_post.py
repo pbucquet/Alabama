@@ -181,9 +181,11 @@ LINKEDIN POST GUIDELINES (strict — not suggestions):
 - Short sentences. One idea per sentence. Paragraph breaks generously.
 - Maximum 200 words total (longer is allowed only when 3+ stories require it,
   hard cap 280 words).
-- If source URLs are provided: include each one in the text where relevant,
-  formatted as "👉 [URL]". Do NOT add a separate "Read more" section — weave
-  the URLs naturally or list them after the closing line.
+- If source URLs are provided: include the actual URL in the post where relevant,
+  preceded by the 👉 emoji. Example: "👉 https://example.com". Do NOT write the
+  literal text "[URL]" — always use the real URL from the story data.
+  Do NOT add a separate "Read more" section — weave the URLs naturally or list
+  them after the closing line.
 - Hashtags at the very end, maximum 4–5 relevant ones.
 - No first-person — write as an observer sharing insights.
 - Tone: professional, forward-looking, provocative when the material invites it.
