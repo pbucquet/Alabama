@@ -201,6 +201,7 @@ def _fetch_html(url: str, label: str) -> dict | None:
     try:
         resp = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT)
         resp.raise_for_status()
+        resp.encoding = resp.apparent_encoding or "utf-8"
         text = _strip_html(resp.text)
         # Try to extract a title from <title>...</title>
         title_match = re.search(r'<title[^>]*>(.*?)</title>', resp.text, re.IGNORECASE | re.DOTALL)
@@ -241,6 +242,7 @@ def fetch_web_sources(
         try:
             resp = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT)
             resp.raise_for_status()
+            resp.encoding = resp.apparent_encoding or "utf-8"
             content_type = resp.headers.get("Content-Type", "")
 
             is_feed = (
