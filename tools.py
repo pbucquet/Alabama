@@ -105,17 +105,20 @@ class SendEmailTool(BaseTool):
     name: str = "send_email"
     description: str = (
         "Sends the daily briefing email via SMTP. "
-        "Input must be a JSON string with keys: subject (str), body_html (str)."
+        "Call with two arguments: subject (str) and body_html (str). "
+        "Do NOT wrap them in JSON — pass them as plain string arguments."
     )
 
-    def _run(self, payload: str) -> str:
+    def _run(self, subject: str = "", body_html: str = "", payload: str = "") -> str:
         import smtplib
         import email.mime.multipart
         import email.mime.text
         try:
-            data = json.loads(clean_json(payload))
-            subject = data["subject"]
-            body_html = data["body_html"]
+            # Accept either direct args (preferred) or legacy JSON payload
+            if not subject and payload:
+                data = json.loads(clean_json(payload))
+                subject = data["subject"]
+                body_html = data["body_html"]
 
             sender_email = os.environ["SENDER_EMAIL"]
             sender_password = os.environ["SENDER_APP_PASSWORD"]

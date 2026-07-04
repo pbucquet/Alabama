@@ -46,7 +46,7 @@ task_email = Task(
         "Tweets: {tweets_json}\n"
         "LinkedIn posts: {linkedin_json}\n"
         "Instagram: {instagram_json}\n\n"
-        "Send via send_email tool with:\n"
+        "Send via send_email tool. Pass TWO separate string arguments — do NOT wrap in JSON:\n"
         "  subject: '{email_subject_prefix} - {today_iso}'\n"
         "  body_html: full HTML email with this structure:\n\n"
         "    <h1>{email_subject_prefix} -- {today_date} ET</h1>\n"
