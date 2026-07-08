@@ -333,59 +333,20 @@ if emails:
 
 # ─── Step 4: Write and push tweets directly via Python ───────────────────────
 
+import importlib.util as _ilu
+_bt = _ilu.spec_from_file_location("buffer_tool", os.path.join(os.path.dirname(__file__), "..", "shared", "tools", "buffer_tool.py"))
+_bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
+_push_to_buffer = _bm.push_to_buffer
+
+
 def push_tweet_to_buffer(tweet_text: str) -> bool:
-    """Push a single tweet to Buffer via GraphQL. Returns True on success."""
-    import requests as req_lib
-    token = os.environ.get("BUFFER_ACCESS_TOKEN", "")
+    token      = os.environ.get("BUFFER_ACCESS_TOKEN", "")
     channel_id = os.environ.get("BUFFER_CHANNEL_ID", "")
-    if not token or not channel_id:
-        log.error("BUFFER_ACCESS_TOKEN or BUFFER_CHANNEL_ID not set")
-        return False
-    tweet_escaped = json.dumps(tweet_text)
-    mutation = f"""
-    mutation CreatePost {{
-      createPost(input: {{
-        text: {tweet_escaped},
-        channelId: "{channel_id}",
-        schedulingType: automatic,
-        mode: addToQueue,
-        assets: []
-      }}) {{
-        ... on PostActionSuccess {{
-          post {{ id }}
-        }}
-        ... on MutationError {{
-          message
-        }}
-      }}
-    }}
-    """
-    try:
-        resp = req_lib.post(
-            "https://api.buffer.com",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {token}",
-            },
-            json={"query": mutation},
-            timeout=15,
-        )
-        result = resp.json()
-        if result.get("errors"):
-            raise Exception(json.dumps(result["errors"]))
-        post_result = result.get("data", {}).get("createPost", {})
-        if post_result.get("post", {}).get("id"):
-            log.info(f"Buffer push OK — post ID: {post_result['post']['id']} | {tweet_text}")
-            return True
-        else:
-            raise Exception(post_result.get("message", json.dumps(result)))
-    except Exception as e:
-        log.error(f"Buffer push failed: {e}")
-        notify_sophie(f"Buffer push failed (tweet). Draft saved to tweets_draft.txt. Error: {str(e)[:120]}")
-        draft_path = os.path.join(os.path.dirname(__file__), "tweets_draft.txt")
-        with open(draft_path, "a") as f:
-            f.write(f"{datetime.now(timezone.utc).isoformat()} | {tweet_text}\n")
-        return False
+    draft_path = os.path.join(os.path.dirname(__file__), "tweets_draft.txt")
+    ok = _push_to_buffer(tweet_text, channel_id, token, label="tweet", draft_path=draft_path)
+    if not ok:
+        notify_sophie(f"Buffer push failed (tweet). Draft saved to tweets_draft.txt.")
+    return ok
 
 
 def write_tweets(stories: list, oc, owned_source_labels: set | None = None) -> list:

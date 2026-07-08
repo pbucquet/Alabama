@@ -35,9 +35,18 @@ import re
 import time
 from datetime import datetime, timezone
 
+import importlib.util as _ilu
 import requests
 
 log = logging.getLogger(__name__)
+
+# ─── Shared Buffer push ───────────────────────────────────────────────────────
+_bt = _ilu.spec_from_file_location(
+    "buffer_tool",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shared", "tools", "buffer_tool.py"),
+)
+_bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
+_push_to_buffer_shared = _bm.push_to_buffer
 
 
 # ─── Context loader ───────────────────────────────────────────────────────────
@@ -304,59 +313,14 @@ def _write_caption(
 # ─── Buffer push ──────────────────────────────────────────────────────────────
 
 def _push_to_buffer(caption: str, image_url: str, channel_id: str) -> bool:
-    token = os.environ.get("BUFFER_ACCESS_TOKEN", "")
-    if not token or not channel_id:
-        log.error("Cannot push to Instagram: BUFFER_ACCESS_TOKEN or INSTAGRAM_CHANNEL_ID missing.")
-        return False
-
-    text_json  = json.dumps(caption)
-    image_json = json.dumps(image_url)
-    mutation = f"""
-    mutation CreatePost {{
-      createPost(input: {{
-        text: {text_json},
-        channelId: "{channel_id}",
-        media: {{ url: {image_json} }},
-        schedulingType: automatic,
-        mode: addToQueue
-      }}) {{
-        ... on PostActionSuccess {{
-          post {{ id }}
-        }}
-        ... on MutationError {{
-          message
-        }}
-      }}
-    }}
-    """
-    try:
-        resp = requests.post(
-            "https://api.buffer.com",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {token}",
-            },
-            json={"query": mutation},
-            timeout=15,
-        )
-        data = resp.json()
-        if data.get("errors"):
-            raise Exception(json.dumps(data["errors"]))
-        post_result = data.get("data", {}).get("createPost", {})
-        if post_result.get("post", {}).get("id"):
-            log.info(f"Instagram post queued in Buffer — ID: {post_result['post']['id']}")
-            return True
-        raise Exception(post_result.get("message", json.dumps(data)))
-    except Exception as e:
-        log.error(f"Buffer Instagram push failed: {e}")
-        draft_path = os.path.join(os.path.dirname(__file__), "instagram_drafts.txt")
-        with open(draft_path, "a") as f:
-            f.write(f"\n{'='*60}\n")
-            f.write(f"{datetime.now(timezone.utc).isoformat()}\n")
-            f.write(f"IMAGE: {image_url}\n")
-            f.write(f"CAPTION:\n{caption}\n")
-        log.info("Instagram draft saved to instagram_drafts.txt")
-        return False
+    token      = os.environ.get("BUFFER_ACCESS_TOKEN", "")
+    draft_path = os.path.join(os.path.dirname(__file__), "instagram_drafts.txt")
+    return _push_to_buffer_shared(
+        caption, channel_id, token,
+        label="Instagram",
+        draft_path=draft_path,
+        image_url=image_url,
+    )
 
 
 # ─── Deduplication ───────────────────────────────────────────────────────────
