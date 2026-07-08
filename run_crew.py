@@ -14,7 +14,24 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
+# ─── Sophie notification helper ───────────────────────────────────────────────
+
+import requests as _req
+
+def notify_sophie(message: str) -> None:
+    """Fire-and-forget POST to Sophie's notify server on localhost:5555."""
+    agent_name = os.environ.get("AGENT_NAME", "Alabama")
+    try:
+        _req.post(
+            "http://localhost:5555/notify",
+            json={"message": f"[{agent_name}] {message}"},
+            timeout=5,
+        )
+    except Exception as e:
+        log.warning(f"notify_sophie failed (non-fatal): {e}")
+
 # ─── Logging ──────────────────────────────────────────────────────────────────
+
 
 log_path = os.path.join(os.path.dirname(__file__), "logs", "crew.log")
 os.makedirs(os.path.dirname(log_path), exist_ok=True)
@@ -331,7 +348,8 @@ def push_tweet_to_buffer(tweet_text: str) -> bool:
         text: {tweet_escaped},
         channelId: "{channel_id}",
         schedulingType: automatic,
-        mode: addToQueue
+        mode: addToQueue,
+        assets: []
       }}) {{
         ... on PostActionSuccess {{
           post {{ id }}
@@ -363,6 +381,7 @@ def push_tweet_to_buffer(tweet_text: str) -> bool:
             raise Exception(post_result.get("message", json.dumps(result)))
     except Exception as e:
         log.error(f"Buffer push failed: {e}")
+        notify_sophie(f"Buffer push failed (tweet). Draft saved to tweets_draft.txt. Error: {str(e)[:120]}")
         draft_path = os.path.join(os.path.dirname(__file__), "tweets_draft.txt")
         with open(draft_path, "a") as f:
             f.write(f"{datetime.now(timezone.utc).isoformat()} | {tweet_text}\n")
@@ -466,8 +485,11 @@ try:
             f"LinkedIn [{status}] grade={story.get('grade')} | "
             f"{story.get('subject', '')[:60]}"
         )
+        if not lr["linkedin_pushed"]:
+            notify_sophie("Buffer push failed (LinkedIn). Post saved to linkedin_drafts.txt.")
 except Exception as e:
     log.error(f"LinkedIn post step failed: {e}", exc_info=True)
+    notify_sophie(f"LinkedIn post step crashed: {str(e)[:120]}")
 
 # ─── Step 4c: Generate Instagram image + caption ─────────────────────────────
 
@@ -482,8 +504,11 @@ try:
             f"Instagram [{status}] image={instagram_result['image_url'][:60]}… | "
             f"caption={instagram_result['caption'][:60]}…"
         )
+        if instagram_result.get("instagram_enabled") and not instagram_result["instagram_pushed"]:
+            notify_sophie("Buffer push failed (Instagram). Check instagram_drafts.txt.")
 except Exception as e:
     log.error(f"Instagram step failed: {e}", exc_info=True)
+    notify_sophie(f"Instagram step crashed: {str(e)[:120]}")
 
 # ─── Step 5: Send email via crew ──────────────────────────────────────────────
 
