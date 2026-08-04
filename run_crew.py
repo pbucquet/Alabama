@@ -46,19 +46,22 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _enabled(var: str, default: bool = True) -> bool:
+    """Read a boolean env var. Absent → default. 'true'/'1'/'yes' → True. Anything else → False."""
+    val = os.environ.get(var)
+    if val is None:
+        return default
+    return val.strip().lower() in ("true", "1", "yes")
+
 # ─── Validate environment ─────────────────────────────────────────────────────
 
-REQUIRED_ENV = [
-    "OPENAI_API_KEY",
-    "RECIPIENT_EMAIL",
-    "SENDER_EMAIL",
-    "SENDER_APP_PASSWORD",
-]
+REQUIRED_ENV = ["OPENAI_API_KEY"]
 
-# Optional — Alabama runs without them but skips the relevant steps:
-#   AGENTMAIL_API_KEY + SENDER_INBOX_ID  → newsletter email fetch skipped
-#   BUFFER_ACCESS_TOKEN + BUFFER_CHANNEL_ID → tweet push skipped
-#   LINKEDIN_CHANNEL_ID                  → LinkedIn push skipped
+# SMTP vars only required when EMAIL_ENABLED (default true)
+if _enabled("EMAIL_ENABLED"):
+    REQUIRED_ENV += ["RECIPIENT_EMAIL", "SENDER_EMAIL", "SENDER_APP_PASSWORD"]
 
 missing = [k for k in REQUIRED_ENV if not os.environ.get(k)]
 if missing:
@@ -337,14 +340,6 @@ import importlib.util as _ilu
 _bt = _ilu.spec_from_file_location("buffer_tool", os.path.join(os.path.dirname(__file__), "..", "shared", "tools", "buffer_tool.py"))
 _bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
 _push_to_buffer = _bm.push_to_buffer
-
-
-def _enabled(var: str, default: bool = True) -> bool:
-    """Read a boolean env var. Absent → default. 'true'/'1'/'yes' → True. Anything else → False."""
-    val = os.environ.get(var)
-    if val is None:
-        return default
-    return val.strip().lower() in ("true", "1", "yes")
 
 
 def push_tweet_to_buffer(tweet_text: str) -> bool:
