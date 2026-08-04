@@ -479,58 +479,46 @@ except Exception as e:
     log.error(f"Instagram step failed: {e}", exc_info=True)
     notify_sophie(f"Instagram step crashed: {str(e)[:120]}")
 
-# ─── Step 5: Send email via crew ──────────────────────────────────────────────
+# ─── Step 5: Render and send email ───────────────────────────────────────────
 
-from crew import build_crew
+from email_renderer import render_briefing_email, send_briefing_email
 
-tweets_json = json.dumps({
+email_subject_prefix = os.environ.get("EMAIL_SUBJECT_PREFIX", "Daily Newsletter Briefing")
+
+tweets_dict = {
     "tweet1":        tweet_texts[0] if len(tweet_texts) > 0 else "",
     "tweet1_pushed": tweet_push_results[0] if len(tweet_push_results) > 0 else False,
     "tweet2":        tweet_texts[1] if len(tweet_texts) > 1 else "",
     "tweet2_pushed": tweet_push_results[1] if len(tweet_push_results) > 1 else False,
-})
+}
 
-# linkedin_results is a list of 0 or 1 dicts (one post per day)
-linkedin_json = json.dumps([
+linkedin_posts = [
     {
         "sub_category":    lr["sub_category"],
         "stories_used":    len(lr["selected_stories"]),
         "top_grade":       max((s.get("grade", 0) for s in lr["selected_stories"]), default=0),
-        "grades":          [s.get("grade") for s in lr["selected_stories"]],
-        "subjects":        [s.get("subject", "") for s in lr["selected_stories"]],
         "linkedin_post":   lr["linkedin_post"],
         "linkedin_pushed": lr["linkedin_pushed"],
     }
     for lr in linkedin_results
-])
+]
 
 try:
-    crew = build_crew()
-    email_subject_prefix = os.environ.get("EMAIL_SUBJECT_PREFIX", "Daily Newsletter Briefing")
-
-    result = crew.kickoff(inputs={
-        "today_date": today_et,
-        "today_iso": today_iso,
-        "email_subject_prefix": email_subject_prefix,
-        "stories_json": json.dumps(stories),
-        "emails_json": json.dumps([
-            {"from": e["from"], "subject": e["subject"]} for e in emails
-        ]),
-        "total_fetched": str(total_fetched),
-        "total_extracted": str(len(all_extracted_stories)),
-        "total_included": str(len(stories)),
-        "tweets_json": tweets_json,
-        "linkedin_json": linkedin_json,
-        "instagram_json": json.dumps({
-            "image_url":         instagram_result["image_url"] if instagram_result else "",
-            "caption":           instagram_result["caption"] if instagram_result else "",
-            "dalle_prompt":      instagram_result["dalle_prompt"] if instagram_result else "",
-            "instagram_pushed":  instagram_result["instagram_pushed"] if instagram_result else False,
-            "instagram_enabled": instagram_result["instagram_enabled"] if instagram_result else False,
-        } if instagram_result else {}),
-    })
-    log.info("=== Crew completed successfully ===")
-    log.info(f"Result: {str(result)[:300]}")
+    subject, body_html = render_briefing_email(
+        today_date=today_et,
+        email_subject_prefix=email_subject_prefix,
+        stories=stories,
+        emails=[{"from": e["from"], "subject": e["subject"]} for e in emails],
+        total_fetched=total_fetched,
+        total_extracted=len(all_extracted_stories),
+        total_included=len(stories),
+        tweets=tweets_dict,
+        linkedin_posts=linkedin_posts,
+        instagram=instagram_result or {},
+    )
+    result = send_briefing_email(subject, body_html)
+    log.info("=== Email sent successfully ===")
+    log.info(f"Result: {result}")
 except Exception as e:
-    log.error(f"Crew failed: {e}", exc_info=True)
+    log.error(f"Email step failed: {e}", exc_info=True)
     sys.exit(1)
