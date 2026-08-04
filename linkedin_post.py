@@ -280,7 +280,8 @@ def write_linkedin_post(
         f"2. Write a companion tweet: max 140 chars, "
         f"{'first person, personal and inviting' if is_owned else 'no hashtags, punchy'}, "
         f"include one URL if available.\n\n"
-        f"Return ONLY a valid JSON object with exactly two keys:\n"
+        f"Return ONLY a valid JSON object with exactly three keys:\n"
+        f'  "title": string (30–50 characters, punchy headline summarising the post angle)\n'
         f'  "linkedin_post": string\n'
         f'  "tweet": string (max 140 chars, no hashtags)\n'
         f"No preamble, no explanation, no markdown fences. Just the JSON object."
@@ -335,6 +336,7 @@ def write_linkedin_post(
             except Exception:
                 pass
 
+        result.setdefault("title", "")
         result.setdefault("linkedin_post", text)
         result.setdefault("tweet", "")
         return result
@@ -360,6 +362,7 @@ def write_linkedin_post(
                 if start != -1 and end > start:
                     text = text[start:end]
                 result = json.loads(text)
+                result.setdefault("title", "")
                 result.setdefault("linkedin_post", text)
                 result.setdefault("tweet", "")
                 return result
@@ -381,35 +384,14 @@ def _buffer_push(text: str, channel_id: str, label: str = "post") -> bool:
 
 # ─── Website webhook ──────────────────────────────────────────────────────────
 
-def _post_to_webhook(
-    webhook_url: str,
-    linkedin_post: str,
-    selected_stories: list[dict],
-    sub_category: str,
-    linkedin_pushed: bool,
-) -> None:
+def _post_to_webhook(webhook_url: str, title: str, linkedin_post: str) -> None:
     """POST the LinkedIn post to an external website endpoint. Fire-and-forget."""
-    agent_name = os.environ.get("AGENT_NAME", "Alabama")
-    today_iso  = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
+    today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     payload = {
-        "date":            today_iso,
-        "agent_name":      agent_name,
-        "sub_category":    sub_category,
-        "linkedin_post":   linkedin_post,
-        "pushed_to_buffer": linkedin_pushed,
-        "stories": [
-            {
-                "title":    s.get("subject", ""),
-                "summary":  s.get("summary", ""),
-                "grade":    s.get("grade", 0),
-                "source":   s.get("source", ""),
-                "category": s.get("category", ""),
-            }
-            for s in selected_stories
-        ],
+        "date":          today_iso,
+        "title":         title,
+        "linkedin_post": linkedin_post,
     }
-
     try:
         resp = _requests.post(webhook_url, json=payload, timeout=10)
         resp.raise_for_status()
@@ -464,6 +446,7 @@ def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: s
         f"({len(selected)} stor{'y' if len(selected)==1 else 'ies'})…"
     )
     post_data     = write_linkedin_post(selected, author_context=author_context, owned_source_labels=owned_source_labels)
+    title         = post_data.get("title", "").strip()
     linkedin_post = post_data.get("linkedin_post", "").strip()
     tweet         = post_data.get("tweet", "").strip()
 
@@ -501,10 +484,8 @@ def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: s
     if webhook_url:
         _post_to_webhook(
             webhook_url=webhook_url,
+            title=title,
             linkedin_post=linkedin_post,
-            selected_stories=selected,
-            sub_category=sub_category,
-            linkedin_pushed=linkedin_pushed,
         )
 
     log.info(
@@ -518,6 +499,7 @@ def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: s
     return [{
         "selected_stories":  selected,
         "sub_category":      sub_category,
+        "title":             title,
         "linkedin_post":     linkedin_post,
         "tweet":             tweet,
         "linkedin_pushed":   linkedin_pushed,
