@@ -357,8 +357,10 @@ def write_tweets(stories: list, oc, owned_source_labels: set | None = None) -> l
     results = []
     for story in top2:
         url = story.get("source", "")
-        url_len = len(url) + 1  # +1 for the space before URL
-        max_text_len = 140 - url_len if url else 140
+        # Twitter wraps every URL to exactly 23 chars via t.co, regardless of actual length
+        TCO_LEN = 23
+        url_budget = (TCO_LEN + 1) if url else 0  # +1 for the space before URL
+        max_text_len = 140 - url_budget if url else 140
         is_owned = (
             story.get("is_owned_source")
             or (owned_source_labels and story.get("from_newsletter", "") in owned_source_labels)
@@ -371,10 +373,10 @@ def write_tweets(stories: list, oc, owned_source_labels: set | None = None) -> l
             f"Write a single tweet for this story. Rules:\n"
             f"{voice_rule}"
             f"- End with the source URL: {url}\n"
-            f"- HARD LIMIT: 140 characters TOTAL (URL included). "
-            f"The URL alone is {url_len} chars, so your text before it must be "
-            f"{max_text_len} chars or fewer.\n"
-            "- Count every character carefully before responding.\n"
+            f"- Twitter shortens every URL to 23 characters automatically. So your tweet text "
+            f"(before the URL) must be {max_text_len} characters or fewer, and the full tweet "
+            f"(text + space + URL) must be 140 characters or fewer as Twitter counts it.\n"
+            f"- Write {max_text_len} chars of text maximum, then a space, then the URL. Nothing else.\n"
             "- Return ONLY the final tweet text (including the URL), nothing else.\n\n"
             f"Story summary: {story.get('summary', '')}"
         )
@@ -387,15 +389,21 @@ def write_tweets(stories: list, oc, owned_source_labels: set | None = None) -> l
                     messages=[{"role": "user", "content": prompt}],
                 )
                 candidate = resp.choices[0].message.content.strip().strip('"')
-                if len(candidate) <= 140:
+                # Measure Twitter length: URLs count as 23 chars regardless of actual length
+                twitter_len = len(candidate)
+                if url and url in candidate:
+                    twitter_len = twitter_len - len(url) + TCO_LEN
+                if twitter_len <= 140:
                     tweet = candidate
-                    log.info(f"Tweet written ({len(tweet)} chars): {tweet}")
+                    log.info(f"Tweet written ({twitter_len} Twitter chars, {len(tweet)} raw): {tweet}")
                     break
                 else:
-                    log.warning(f"Tweet too long ({len(candidate)} chars), retrying... (attempt {attempt+1}/5)")
+                    log.warning(f"Tweet too long ({twitter_len} Twitter chars), retrying... (attempt {attempt+1}/5)")
+                    text_part = candidate.replace(url, "").strip()
+                    log.warning(f"Text part is {len(text_part)} chars, max is {max_text_len}")
                     prompt += (
-                        f"\n\nAttempt {attempt+1} was {len(candidate)} chars — still too long. "
-                        f"You MUST stay under 140 chars total. Cut words ruthlessly."
+                        f"\n\nAttempt {attempt+1}: text before URL was {len(text_part)} chars "
+                        f"but must be {max_text_len} or fewer. Cut ruthlessly."
                     )
             except Exception as e:
                 log.error(f"Tweet generation failed (attempt {attempt+1}): {e}")
