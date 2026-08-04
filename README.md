@@ -10,9 +10,10 @@ Alabama reads your newsletter subscriptions and web sources every morning, extra
 1. **Fetch** — reads emails from an [AgentMail](https://agentmail.to) inbox (optional) and any URLs listed in `sources.md` (optional). At least one source must be configured.
 2. **Extract** — GPT-4o parses all inputs, grades stories 1–10 across configurable categories (default: AI, Blockchain/Crypto, Fintech, Consulting)
 3. **Filter** — only grade ≥ 5 stories make it into the briefing email
-4. **Tweets** — GPT-4o writes 2 tweets for the top 2 stories, pushed to Buffer (skipped if `BUFFER_CHANNEL_ID` is not set)
-5. **LinkedIn** — Claude Sonnet writes one post from the best grade-9/10 stories, in your voice, pushed to Buffer (skipped if `LINKEDIN_CHANNEL_ID` is not set)
-6. **Email** — a CrewAI agent composes and sends the HTML briefing email via SMTP
+4. **Tweets** — GPT-4o writes 2 tweets for the top 2 stories, pushed to Buffer (skipped if `TWITTER_ENABLED=false` or `BUFFER_CHANNEL_ID` is not set)
+5. **LinkedIn** — Claude Sonnet writes one post + a short headline from the best grade-9/10 stories, in your voice, pushed to Buffer (skipped if `LINKEDIN_ENABLED=false` or `LINKEDIN_CHANNEL_ID` is not set); optionally POSTed to an external website via `LINKEDIN_WEBHOOK_URL`
+6. **Instagram** — DALL-E generates an image + caption (skipped if `INSTAGRAM_ENABLED=false`)
+7. **Email** — a deterministic renderer composes and sends the HTML briefing email via SMTP (skipped if `EMAIL_ENABLED=false`)
 
 ## Setup
 
@@ -43,6 +44,10 @@ cp .env.example .env
 - `BUFFER_ACCESS_TOKEN` + `BUFFER_CHANNEL_ID` — tweet publishing; leave blank to skip
 - `LINKEDIN_CHANNEL_ID` — LinkedIn publishing; leave blank to skip
 - `TWITTER_CHANNEL_ID` — optional second Buffer channel for the LinkedIn companion tweet
+- `LINKEDIN_WEBHOOK_URL` — POST the LinkedIn post + headline to an external website after it is written; leave blank to skip
+
+**Channel enable/disable flags** (default `true` — set to `false` to disable a channel without removing its credentials):
+- `EMAIL_ENABLED`, `TWITTER_ENABLED`, `LINKEDIN_ENABLED`, `INSTAGRAM_ENABLED`
 
 See `.env.example` for the full reference.
 
