@@ -392,8 +392,12 @@ def _post_to_webhook(webhook_url: str, title: str, linkedin_post: str) -> None:
         "title":         title,
         "linkedin_post": linkedin_post,
     }
+    headers = {"Content-Type": "application/json"}
+    secret = os.environ.get("LINKEDIN_WEBHOOK_SECRET", "").strip()
+    if secret:
+        headers["X-Alabama-Secret"] = secret
     try:
-        resp = _requests.post(webhook_url, json=payload, timeout=10)
+        resp = _requests.post(webhook_url, json=payload, headers=headers, timeout=10)
         resp.raise_for_status()
         log.info(f"Webhook POST to {webhook_url} succeeded ({resp.status_code}).")
     except Exception as exc:
