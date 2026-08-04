@@ -38,6 +38,7 @@ import os
 import random
 import re
 import importlib.util as _ilu
+import requests as _requests
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -378,6 +379,45 @@ def _buffer_push(text: str, channel_id: str, label: str = "post") -> bool:
     return _push_to_buffer_shared(text, channel_id, token, label=label, draft_path=draft_path)
 
 
+# ─── Website webhook ──────────────────────────────────────────────────────────
+
+def _post_to_webhook(
+    webhook_url: str,
+    linkedin_post: str,
+    selected_stories: list[dict],
+    sub_category: str,
+    linkedin_pushed: bool,
+) -> None:
+    """POST the LinkedIn post to an external website endpoint. Fire-and-forget."""
+    agent_name = os.environ.get("AGENT_NAME", "Alabama")
+    today_iso  = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    payload = {
+        "date":            today_iso,
+        "agent_name":      agent_name,
+        "sub_category":    sub_category,
+        "linkedin_post":   linkedin_post,
+        "pushed_to_buffer": linkedin_pushed,
+        "stories": [
+            {
+                "title":    s.get("subject", ""),
+                "summary":  s.get("summary", ""),
+                "grade":    s.get("grade", 0),
+                "source":   s.get("source", ""),
+                "category": s.get("category", ""),
+            }
+            for s in selected_stories
+        ],
+    }
+
+    try:
+        resp = _requests.post(webhook_url, json=payload, timeout=10)
+        resp.raise_for_status()
+        log.info(f"Webhook POST to {webhook_url} succeeded ({resp.status_code}).")
+    except Exception as exc:
+        log.warning(f"Webhook POST to {webhook_url} failed (non-fatal): {exc}")
+
+
 # ─── Main entry point ─────────────────────────────────────────────────────────
 
 def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: set | None = None) -> list[dict]:
@@ -434,20 +474,38 @@ def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: s
     log.info(f"LinkedIn post written ({len(linkedin_post)} chars):\n{linkedin_post[:300]}…")
 
     # ── 4. Push to Buffer ─────────────────────────────────────────────────────
+    linkedin_enabled = os.environ.get("LINKEDIN_ENABLED", "true").strip().lower() in ("true", "1", "yes")
+    twitter_enabled  = os.environ.get("TWITTER_ENABLED",  "true").strip().lower() in ("true", "1", "yes")
+
     linkedin_pushed = False
-    if linkedin_channel_id:
+    if not linkedin_enabled:
+        log.info("LINKEDIN_ENABLED=false — skipping LinkedIn Buffer push.")
+    elif linkedin_channel_id:
         linkedin_pushed = _buffer_push(linkedin_post, linkedin_channel_id, label="LinkedIn")
     else:
         log.warning("Skipping LinkedIn push — LINKEDIN_CHANNEL_ID not set.")
 
     tweet_pushed = False
-    if tweet and twitter_channel_id:
+    if not twitter_enabled:
+        log.info("TWITTER_ENABLED=false — skipping LinkedIn companion tweet push.")
+    elif tweet and twitter_channel_id:
         if len(tweet) > 140:
             log.warning(f"Tweet too long ({len(tweet)} chars) — truncating.")
             tweet = tweet[:137] + "…"
         tweet_pushed = _buffer_push(tweet, twitter_channel_id, label="tweet")
     elif tweet and not twitter_channel_id:
         log.info("Tweet written but TWITTER_CHANNEL_ID not set — skipping tweet push.")
+
+    # ── 5. POST to website webhook (fire-and-forget) ──────────────────────────
+    webhook_url = os.environ.get("LINKEDIN_WEBHOOK_URL", "").strip()
+    if webhook_url:
+        _post_to_webhook(
+            webhook_url=webhook_url,
+            linkedin_post=linkedin_post,
+            selected_stories=selected,
+            sub_category=sub_category,
+            linkedin_pushed=linkedin_pushed,
+        )
 
     log.info(
         f"LinkedIn step complete — "

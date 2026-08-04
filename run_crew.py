@@ -339,6 +339,14 @@ _bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
 _push_to_buffer = _bm.push_to_buffer
 
 
+def _enabled(var: str, default: bool = True) -> bool:
+    """Read a boolean env var. Absent → default. 'true'/'1'/'yes' → True. Anything else → False."""
+    val = os.environ.get(var)
+    if val is None:
+        return default
+    return val.strip().lower() in ("true", "1", "yes")
+
+
 def push_tweet_to_buffer(tweet_text: str) -> bool:
     token      = os.environ.get("BUFFER_ACCESS_TOKEN", "")
     channel_id = os.environ.get("BUFFER_CHANNEL_ID", "")
@@ -423,7 +431,7 @@ def write_tweets(stories: list, oc, owned_source_labels: set | None = None) -> l
 log.info("=== Step 4: Writing and pushing tweets ===")
 tweet_texts = []
 tweet_push_results = []  # parallel list: True/False per tweet
-if stories:
+if stories and _enabled("TWITTER_ENABLED"):
     tweet_texts = write_tweets(stories, oc, owned_source_labels=owned_source_labels)
     log.info(f"Tweets written: {len(tweet_texts)}")
     if os.environ.get("BUFFER_ACCESS_TOKEN") and os.environ.get("BUFFER_CHANNEL_ID"):
@@ -437,6 +445,8 @@ if stories:
     else:
         tweet_push_results = [False] * len(tweet_texts)
         log.info("BUFFER_CHANNEL_ID not set — tweets written but not pushed to Buffer")
+elif not _enabled("TWITTER_ENABLED"):
+    log.info("TWITTER_ENABLED=false — skipping tweets")
 else:
     log.info("No stories — skipping tweets")
 
@@ -516,9 +526,12 @@ try:
         linkedin_posts=linkedin_posts,
         instagram=instagram_result or {},
     )
-    result = send_briefing_email(subject, body_html)
-    log.info("=== Email sent successfully ===")
-    log.info(f"Result: {result}")
+    if _enabled("EMAIL_ENABLED"):
+        result = send_briefing_email(subject, body_html)
+        log.info("=== Email sent successfully ===")
+        log.info(f"Result: {result}")
+    else:
+        log.info("EMAIL_ENABLED=false — briefing email rendered but not sent")
 except Exception as e:
     log.error(f"Email step failed: {e}", exc_info=True)
     sys.exit(1)
