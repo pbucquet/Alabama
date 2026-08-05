@@ -201,9 +201,16 @@ stories = []  # grade >= 5
 
 if emails:
     import anthropic as _anthropic
-    _ac = _anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"]) if os.environ.get("ANTHROPIC_API_KEY") else None
     import openai
     oc = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+    # EXTRACTION_MODEL=haiku uses Claude Haiku 4.5; default is GPT-4o (preserves prior behaviour)
+    _extraction_model = os.environ.get("EXTRACTION_MODEL", "").strip().lower()
+    _ac_extract = (
+        _anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        if _extraction_model == "haiku" and os.environ.get("ANTHROPIC_API_KEY")
+        else None
+    )
 
     # Load existing stories for deduplication
     state_path = os.path.join(os.path.dirname(__file__), "daily_brief.json")
@@ -305,8 +312,8 @@ if emails:
 
         try:
             raw = ""
-            if _ac:
-                _resp = _ac.messages.create(
+            if _ac_extract:
+                _resp = _ac_extract.messages.create(
                     model="claude-haiku-4-5-20251001",
                     max_tokens=8000,
                     messages=[{"role": "user", "content": batch_prompt}],
