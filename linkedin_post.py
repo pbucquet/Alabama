@@ -212,8 +212,12 @@ EDITORIAL POST GUIDELINES (strict — not suggestions):
 - State a position and develop it. The post should read as argued prose, not a digest.
 - Short sentences. Paragraph breaks generously. Vary sentence length.
 - Length: 200–350 words. Do not pad; do not cut substance to hit a ceiling.
-- URLs: list ALL source URLs together at the very end, each on its own line
-  preceded by 👉. Do NOT embed URLs inside the body paragraphs.
+- URLs: after the last paragraph, add a mandatory section exactly like this:
+    Pour aller plus loin :
+    👉 https://...
+    👉 https://...
+  Include EVERY source URL from the stories. This section is required — omitting
+  it is an error. Do NOT embed URLs inside the body paragraphs.
 - Hashtags at the very end, after the URLs, maximum 4–5 relevant ones.
 - No first-person — write as an attentive observer.
 - Language: {post_language}.
