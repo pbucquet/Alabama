@@ -175,7 +175,32 @@ def _load_author_context() -> str:
 # ─── Post writer ──────────────────────────────────────────────────────────────
 
 _DEFAULT_GUIDELINES = """\
-POST GUIDELINES (strict — not suggestions):
+LINKEDIN POST GUIDELINES (strict — not suggestions):
+- This is ONE post that synthesises ALL stories into a single point of view.
+  Do NOT write a bullet-list of summaries. Find the angle that connects them.
+- Open with a specific observation or counter-intuitive claim — never a question.
+- State a position, even a minority one, and defend it briefly.
+- Short sentences. One idea per sentence. Paragraph breaks generously.
+- Maximum 200 words total (longer is allowed only when 3+ stories require it,
+  hard cap 280 words).
+- If source URLs are provided: include the actual URL in the post where relevant,
+  preceded by the 👉 emoji. Example: "👉 https://example.com". Do NOT write the
+  literal text "[URL]" — always use the real URL from the story data.
+  Do NOT add a separate "Read more" section — weave the URLs naturally or list
+  them after the closing line.
+- Hashtags at the very end, maximum 4–5 relevant ones.
+- No first-person — write as an observer sharing insights.
+- Tone: professional, forward-looking, provocative when the material invites it.
+- Simple wording — not a native English speaker audience.
+- Language: {post_language}.
+- FORBIDDEN words/phrases: "game-changer", "disruptive", "revolutionary",
+  "leverage" (as verb), "ecosystem", "excited to share", "thrilled to announce",
+  "in today's rapidly evolving landscape", rhetorical engagement-bait questions.
+- NEVER use emojis except 👉 before source URLs.\
+"""
+
+_EDITORIAL_GUIDELINES = """\
+EDITORIAL POST GUIDELINES (strict — not suggestions):
 - Write ONE unified, flowing article — not a list of summaries, not one paragraph
   per source. The sources are raw material; the post is a single coherent text
   built from the insight they share.
@@ -184,12 +209,11 @@ POST GUIDELINES (strict — not suggestions):
 - Find the thread that connects the stories and build the post around that thread.
 - Open with a specific observation, a concrete fact, or a counter-intuitive claim.
   Never open with a question.
-- State a position and develop it. The post should read as argued prose, not a
-  digest.
+- State a position and develop it. The post should read as argued prose, not a digest.
 - Short sentences. Paragraph breaks generously. Vary sentence length.
 - Length: 200–350 words. Do not pad; do not cut substance to hit a ceiling.
-- URLs: list ALL source URLs together at the very end of the post, each on its own
-  line preceded by 👉. Do NOT embed URLs inside the body paragraphs.
+- URLs: list ALL source URLs together at the very end, each on its own line
+  preceded by 👉. Do NOT embed URLs inside the body paragraphs.
 - Hashtags at the very end, after the URLs, maximum 4–5 relevant ones.
 - No first-person — write as an attentive observer.
 - Language: {post_language}.
@@ -268,7 +292,7 @@ def write_linkedin_post(
         f"You are writing a LinkedIn post on behalf of the author described in the context below.\n\n"
         f"{context_block}"
         f"{voice_instruction}"
-        f"GUIDELINES:\n{_DEFAULT_GUIDELINES.format(post_language=os.environ.get('POST_LANGUAGE', 'match the language of the source stories'))}\n\n"
+        f"GUIDELINES:\n{(_EDITORIAL_GUIDELINES if os.environ.get('POST_STYLE','').strip().lower() == 'editorial' else _DEFAULT_GUIDELINES).format(post_language=os.environ.get('POST_LANGUAGE', 'match the language of the source stories'))}\n\n"
         f"You have {n} stor{'y' if n == 1 else 'ies'} from the same news sub-category "
         f"to work with. Your task is to write ONE LinkedIn post that:\n"
         f"  - Finds the thread connecting {'it' if n == 1 else 'them'}\n"
