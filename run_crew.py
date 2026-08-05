@@ -226,17 +226,6 @@ if emails:
     except Exception as e:
         log.warning(f"Could not load state: {e}")
 
-    # Build email block for prompt
-    email_text = ""
-    for i, em in enumerate(emails):
-        owned_flag = " [OWNED CONTENT — written by the author themselves]" if em.get("is_owned_source") else ""
-        email_text += (
-            f"EMAIL {i+1}:{owned_flag}\n"
-            f"From: {em['from'][:60]}\n"
-            f"Subject: {em['subject'][:80]}\n"
-            f"Body: {em['body_text'][:5000]}\n\n"
-        )
-
     from config import get_categories, get_subcategories, get_all_codes
     _grade_criteria = os.environ.get(
         "GRADE_CRITERIA",
@@ -287,52 +276,74 @@ if emails:
         f"Skip if source URL already in this list: {existing_sources[:20]}\n"
         f"Include ALL relevant stories regardless of grade — include grades 1 through 10.\n\n"
         f"Return ONLY a valid JSON array. No markdown, no explanation, no preamble.\n\n"
-        f"EMAILS:\n{email_text}"
+        f"EMAILS:\n{{email_text}}"
     )
 
-    try:
-        if _ac:
-            _resp = _ac.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=12000,
-                messages=[{"role": "user", "content": prompt}],
+    _EXTRACTION_BATCH_SIZE = 30  # keep output well within 8k token limit
+    all_extracted_stories = []
+
+    for batch_start in range(0, len(emails), _EXTRACTION_BATCH_SIZE):
+        batch = emails[batch_start:batch_start + _EXTRACTION_BATCH_SIZE]
+        batch_end = batch_start + len(batch)
+        log.info(f"Extracting batch {batch_start+1}–{batch_end} of {len(emails)} items…")
+
+        email_text = ""
+        for i, em in enumerate(batch):
+            owned_flag = " [OWNED CONTENT — written by the author themselves]" if em.get("is_owned_source") else ""
+            email_text += (
+                f"EMAIL {i+1}:{owned_flag}\n"
+                f"From: {em['from'][:60]}\n"
+                f"Subject: {em['subject'][:80]}\n"
+                f"Body: {em['body_text'][:5000]}\n\n"
             )
-            raw = _resp.content[0].text.strip()
-            log.info("Story extraction via Claude Haiku 4.5")
-        else:
-            resp = oc.chat.completions.create(
-                model="gpt-4o",
-                max_tokens=12000,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = resp.choices[0].message.content.strip()
-            log.info("Story extraction via GPT-4o (ANTHROPIC_API_KEY not set)")
-        raw = raw.replace("```json", "").replace("```", "").strip()
-        all_extracted_stories = json.loads(raw)
 
-        now_iso = datetime.now(timezone.utc).isoformat()
-        for s in all_extracted_stories:
-            s["timestamp"] = now_iso
-
-        # Filter by grade in Python — gives accurate counts
-        stories = [s for s in all_extracted_stories if int(s.get("grade", 0)) >= 5]
-
-        log.info(
-            f"Story extraction complete: "
-            f"{total_fetched} emails fetched | "
-            f"{len(all_extracted_stories)} stories extracted | "
-            f"{len(stories)} stories included (grade>=5)"
+        batch_prompt = (
+            prompt
+            .replace("{email_text}", email_text)
+            .replace(f"ALL {len(emails)} emails", f"ALL {len(batch)} emails")
         )
 
-    except json.JSONDecodeError as e:
-        log.error(f"GPT-4o returned invalid JSON: {e}")
-        log.error(f"Raw response (first 500 chars): {raw[:500]}")
-        all_extracted_stories = []
-        stories = []
-    except Exception as e:
-        log.error(f"Story extraction failed: {e}", exc_info=True)
-        all_extracted_stories = []
-        stories = []
+        try:
+            raw = ""
+            if _ac:
+                _resp = _ac.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=8000,
+                    messages=[{"role": "user", "content": batch_prompt}],
+                )
+                raw = _resp.content[0].text.strip()
+                log.info(f"Batch {batch_start+1}–{batch_end}: extracted via Claude Haiku 4.5")
+            else:
+                resp = oc.chat.completions.create(
+                    model="gpt-4o",
+                    max_tokens=8000,
+                    messages=[{"role": "user", "content": batch_prompt}],
+                )
+                raw = resp.choices[0].message.content.strip()
+                log.info(f"Batch {batch_start+1}–{batch_end}: extracted via GPT-4o")
+            raw = raw.replace("```json", "").replace("```", "").strip()
+            batch_stories = json.loads(raw)
+            all_extracted_stories.extend(batch_stories)
+            log.info(f"Batch {batch_start+1}–{batch_end}: {len(batch_stories)} stories found")
+        except json.JSONDecodeError as e:
+            log.error(f"Batch {batch_start+1}–{batch_end}: invalid JSON — {e}")
+            log.error(f"Raw response (first 500 chars): {raw[:500]}")
+        except Exception as e:
+            log.error(f"Batch {batch_start+1}–{batch_end}: extraction failed — {e}", exc_info=True)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for s in all_extracted_stories:
+        s["timestamp"] = now_iso
+
+    # Filter by grade in Python — gives accurate counts
+    stories = [s for s in all_extracted_stories if int(s.get("grade", 0)) >= 5]
+
+    log.info(
+        f"Story extraction complete: "
+        f"{total_fetched} emails fetched | "
+        f"{len(all_extracted_stories)} stories extracted | "
+        f"{len(stories)} stories included (grade>=5)"
+    )
 
     # Save state — store only grade>=5 stories
     all_stories = fresh + stories
