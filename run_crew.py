@@ -471,7 +471,7 @@ try:
             f"LinkedIn [{status}] grade={story.get('grade')} | "
             f"{story.get('subject', '')[:60]}"
         )
-        if not lr["linkedin_pushed"]:
+        if not lr["linkedin_pushed"] and _enabled("LINKEDIN_ENABLED") and os.environ.get("LINKEDIN_CHANNEL_ID"):
             notify_sophie("Buffer push failed (LinkedIn). Post saved to linkedin_drafts.txt.")
 except Exception as e:
     log.error(f"LinkedIn post step failed: {e}", exc_info=True)
