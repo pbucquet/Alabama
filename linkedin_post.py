@@ -73,9 +73,10 @@ def select_stories(stories: list[dict]) -> list[dict]:
         src = str(s.get("source", "")).strip().lower()
         return bool(src) and src not in ("not available", "n/a", "none", "null")
 
+    min_grade = int(os.environ.get("MIN_LINKEDIN_GRADE", "9"))
     eligible = [
         s for s in stories
-        if int(s.get("grade", 0)) >= 9
+        if int(s.get("grade", 0)) >= min_grade
         and str(s.get("category", "")).strip()[:1] in valid_cat_keys
         and _has_source(s)
     ]
@@ -93,14 +94,14 @@ def select_stories(stories: list[dict]) -> list[dict]:
 
     if not eligible:
         log.info(
-            "LinkedIn selection: 0 eligible stories "
-            "(need grade>=9, any category) — skipping today."
+            f"LinkedIn selection: 0 eligible stories "
+            f"(need grade>={min_grade}, any category) — skipping today."
         )
         return []
 
     log.info(
         f"LinkedIn selection: {len(eligible)} eligible stories "
-        f"(grade>=9, any category) out of {len(stories)} total."
+        f"(grade>={min_grade}, any category) out of {len(stories)} total."
     )
 
     # Step 2 — group by sub-category
