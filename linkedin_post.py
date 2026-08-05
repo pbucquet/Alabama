@@ -192,7 +192,7 @@ LINKEDIN POST GUIDELINES (strict — not suggestions):
 - No first-person — write as an observer sharing insights.
 - Tone: professional, forward-looking, provocative when the material invites it.
 - Simple wording — not a native English speaker audience.
-- Match the language of the source stories.
+- Language: {post_language}.
 - FORBIDDEN words/phrases: "game-changer", "disruptive", "revolutionary",
   "leverage" (as verb), "ecosystem", "excited to share", "thrilled to announce",
   "in today's rapidly evolving landscape", rhetorical engagement-bait questions.
@@ -268,7 +268,7 @@ def write_linkedin_post(
         f"You are writing a LinkedIn post on behalf of the author described in the context below.\n\n"
         f"{context_block}"
         f"{voice_instruction}"
-        f"GUIDELINES:\n{_DEFAULT_GUIDELINES}\n\n"
+        f"GUIDELINES:\n{_DEFAULT_GUIDELINES.format(post_language=os.environ.get('POST_LANGUAGE', 'match the language of the source stories'))}\n\n"
         f"You have {n} stor{'y' if n == 1 else 'ies'} from the same news sub-category "
         f"to work with. Your task is to write ONE LinkedIn post that:\n"
         f"  - Finds the thread connecting {'it' if n == 1 else 'them'}\n"
