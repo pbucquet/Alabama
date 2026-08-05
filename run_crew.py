@@ -200,6 +200,8 @@ all_extracted_stories = []
 stories = []  # grade >= 5
 
 if emails:
+    import anthropic as _anthropic
+    _ac = _anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"]) if os.environ.get("ANTHROPIC_API_KEY") else None
     import openai
     oc = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
@@ -289,12 +291,22 @@ if emails:
     )
 
     try:
-        resp = oc.chat.completions.create(
-            model="gpt-4o",
-            max_tokens=12000,  # raised to handle larger email bodies
-            messages=[{"role": "user", "content": prompt}]
-        )
-        raw = resp.choices[0].message.content.strip()
+        if _ac:
+            _resp = _ac.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=12000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = _resp.content[0].text.strip()
+            log.info("Story extraction via Claude Haiku 4.5")
+        else:
+            resp = oc.chat.completions.create(
+                model="gpt-4o",
+                max_tokens=12000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = resp.choices[0].message.content.strip()
+            log.info("Story extraction via GPT-4o (ANTHROPIC_API_KEY not set)")
         raw = raw.replace("```json", "").replace("```", "").strip()
         all_extracted_stories = json.loads(raw)
 
