@@ -512,9 +512,8 @@ def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: s
     elif tweet and not twitter_channel_id:
         log.info("Tweet written but TWITTER_CHANNEL_ID not set — skipping tweet push.")
 
-    # ── 5. POST to website webhook (fire-and-forget) ──────────────────────────
-    webhook_url = os.environ.get("LINKEDIN_WEBHOOK_URL", "").strip()
-    if webhook_url:
+    # ── 5. POST to website webhook(s) (fire-and-forget) ───────────────────────
+    for webhook_url in [u.strip() for u in os.environ.get("LINKEDIN_WEBHOOK_URL", "").split(",") if u.strip()]:
         _post_to_webhook(
             webhook_url=webhook_url,
             title=title,
