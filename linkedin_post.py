@@ -196,6 +196,10 @@ LINKEDIN POST GUIDELINES (strict — not suggestions):
 - FORBIDDEN words/phrases: "game-changer", "disruptive", "revolutionary",
   "leverage" (as verb), "ecosystem", "excited to share", "thrilled to announce",
   "in today's rapidly evolving landscape", rhetorical engagement-bait questions.
+- FORBIDDEN framing: never call out a group, camp, side, or school of thought as
+  wrong, misguided, or missing the point. Do not write sentences like "Both camps
+  miss the point", "Critics are wrong", "Optimists forget X". Present a position
+  without putting others down.
 - NEVER use emojis except 👉 before source URLs.\
 """
 
@@ -224,6 +228,10 @@ EDITORIAL POST GUIDELINES (strict — not suggestions):
 - FORBIDDEN words/phrases: "game-changer", "disruptive", "revolutionary",
   "leverage" (as verb), "ecosystem", "excited to share", "thrilled to announce",
   "in today's rapidly evolving landscape", rhetorical engagement-bait questions.
+- FORBIDDEN framing: never call out a group, camp, side, or school of thought as
+  wrong, misguided, or missing the point. Do not write sentences like "Both camps
+  miss the point", "Critics are wrong", "Optimists forget X". Present a position
+  without putting others down.
 - NEVER use emojis except 👉 before source URLs.\
 """
 

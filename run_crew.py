@@ -342,6 +342,21 @@ if emails:
     for s in all_extracted_stories:
         s["timestamp"] = now_iso
 
+    # Deduplicate by URL within this run — keep highest grade when same URL appears multiple times
+    _seen_urls: dict = {}
+    for s in all_extracted_stories:
+        url = s.get("source", "").strip()
+        if url:
+            existing = _seen_urls.get(url)
+            if existing is None or int(s.get("grade", 0)) > int(existing.get("grade", 0)):
+                _seen_urls[url] = s
+        else:
+            _seen_urls[id(s)] = s  # no URL — keep as-is
+    deduped = list(_seen_urls.values())
+    if len(deduped) < len(all_extracted_stories):
+        log.info(f"Deduplication: {len(all_extracted_stories)} → {len(deduped)} stories (removed {len(all_extracted_stories) - len(deduped)} duplicates)")
+    all_extracted_stories = deduped
+
     # Filter by grade in Python — gives accurate counts
     stories = [s for s in all_extracted_stories if int(s.get("grade", 0)) >= 5]
 
