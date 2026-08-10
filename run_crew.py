@@ -341,6 +341,10 @@ if emails:
     now_iso = datetime.now(timezone.utc).isoformat()
     for s in all_extracted_stories:
         s["timestamp"] = now_iso
+        # Strip tracking query params from source URLs
+        url = s.get("source", "").strip()
+        if url and "?" in url:
+            s["source"] = url.split("?")[0]
 
     # Deduplicate by URL within this run — keep highest grade when same URL appears multiple times
     _seen_urls: dict = {}
