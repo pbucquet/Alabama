@@ -275,6 +275,7 @@ if emails:
         f"    IMPORTANT: assign based on the PRIMARY subject of the story — "
         f"the most specific matching category wins.\n"
         f"  - grade: integer 1-10 ({_grade_criteria})\n"
+        f"  - title: a concise headline for THIS specific story (5–10 words, not the newsletter email subject)\n"
         f"  - summary: factual summary, minimum 3 sentences and 60 words, maximum 120 words\n"
         f"  - source: URL from the email if available, else empty string\n"
         f"  - from_newsletter: sender name\n"
