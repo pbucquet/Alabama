@@ -66,9 +66,9 @@ Config parsing lives in `config.py` — import from there, never hardcode catego
 
 ## EC2 deployment
 - EC2 host: `ubuntu@34.237.132.163` (key: `~/.ssh/crewAI.pem`)
-- Repo path on EC2: `/home/ubuntu/alabama`
-- Venv: `/home/ubuntu/alabama/venv/` (Alabama's own, fully independent)
-- To deploy: push to GitHub, then `ssh -i ~/.ssh/crewAI.pem ubuntu@34.237.132.163 "cd /home/ubuntu/alabama && git pull origin main"`
+- Repo path on EC2: `/home/ubuntu/patrick`
+- Venv: `/home/ubuntu/patrick/venv/` (Alabama's own, fully independent)
+- To deploy: push to GitHub, then `ssh -i ~/.ssh/crewAI.pem ubuntu@34.237.132.163 "cd /home/ubuntu/patrick && git pull origin main"`
 - Do not edit files directly on EC2
 - Cron: `30 10 * * *` (10:30 UTC) for `run_crew.py`, `11 11 * * *` for `cleanup_inbox.py`
 
