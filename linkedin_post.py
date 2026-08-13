@@ -317,8 +317,9 @@ def write_linkedin_post(
         f"2. Write a companion tweet: max 140 chars, "
         f"{'first person, personal and inviting' if is_owned else 'no hashtags, punchy'}, "
         f"include one URL if available.\n\n"
-        f"Return ONLY a valid JSON object with exactly three keys:\n"
+        f"Return ONLY a valid JSON object with exactly four keys:\n"
         f'  "title": string (30–50 characters, punchy headline summarising the post angle)\n'
+        f'  "summary": string (exactly 2 sentences, max 40 words total, plain text — used as a teaser in post listings)\n'
         f'  "linkedin_post": string\n'
         f'  "tweet": string (max 140 chars, no hashtags)\n'
         f"No preamble, no explanation, no markdown fences. Just the JSON object."
@@ -374,6 +375,7 @@ def write_linkedin_post(
                 pass
 
         result.setdefault("title", "")
+        result.setdefault("summary", "")
         result.setdefault("linkedin_post", text)
         result.setdefault("tweet", "")
         return result
@@ -400,6 +402,7 @@ def write_linkedin_post(
                     text = text[start:end]
                 result = json.loads(text)
                 result.setdefault("title", "")
+                result.setdefault("summary", "")
                 result.setdefault("linkedin_post", text)
                 result.setdefault("tweet", "")
                 return result
@@ -421,12 +424,13 @@ def _buffer_push(text: str, channel_id: str, label: str = "post") -> bool:
 
 # ─── Website webhook ──────────────────────────────────────────────────────────
 
-def _post_to_webhook(webhook_url: str, title: str, linkedin_post: str) -> None:
+def _post_to_webhook(webhook_url: str, title: str, summary: str, linkedin_post: str) -> None:
     """POST the LinkedIn post to an external website endpoint. Fire-and-forget."""
     today_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     payload = {
         "date":          today_iso,
         "title":         title,
+        "summary":       summary,
         "linkedin_post": linkedin_post,
     }
     headers = {"Content-Type": "application/json"}
@@ -488,6 +492,7 @@ def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: s
     )
     post_data     = write_linkedin_post(selected, author_context=author_context, owned_source_labels=owned_source_labels)
     title         = post_data.get("title", "").strip()
+    summary       = post_data.get("summary", "").strip()
     linkedin_post = post_data.get("linkedin_post", "").strip()
     tweet         = post_data.get("tweet", "").strip()
 
@@ -525,6 +530,7 @@ def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: s
         _post_to_webhook(
             webhook_url=webhook_url,
             title=title,
+            summary=summary,
             linkedin_post=linkedin_post,
         )
 
@@ -540,6 +546,7 @@ def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: s
         "selected_stories":  selected,
         "sub_category":      sub_category,
         "title":             title,
+        "summary":           summary,
         "linkedin_post":     linkedin_post,
         "tweet":             tweet,
         "linkedin_pushed":   linkedin_pushed,
