@@ -276,7 +276,7 @@ if emails:
         f"the most specific matching category wins.\n"
         f"  - grade: integer 1-10 ({_grade_criteria})\n"
         f"  - title: a concise headline for THIS specific story (5–10 words, not the newsletter email subject)\n"
-        f"  - summary: factual summary, minimum 3 sentences and 60 words, maximum 120 words\n"
+        f"  - summary: factual summary, minimum 3 sentences and 60 words, maximum 120 words. Focus on the topic and findings — do NOT mention the author's name or attribute claims to them (e.g. never write 'X argues that…' or 'According to X…'). Write as if reporting the facts directly.\n"
         f"  - source: URL from the email if available, else empty string\n"
         f"  - from_newsletter: sender name\n"
         f"  - subject: email subject\n"
