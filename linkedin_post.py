@@ -41,6 +41,7 @@ import importlib.util as _ilu
 import requests as _requests
 from collections import defaultdict
 from datetime import datetime, timezone
+from alabama_core.write_post import write_linkedin_post as _core_write_linkedin_post
 
 _bt = _ilu.spec_from_file_location("buffer_tool", os.path.join(os.path.dirname(__file__), "..", "shared", "tools", "buffer_tool.py"))
 _bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
@@ -172,245 +173,19 @@ def _load_author_context() -> str:
     return "\n\n---\n\n".join(chunks)
 
 
-# ─── Post writer ──────────────────────────────────────────────────────────────
-
-_DEFAULT_GUIDELINES = """\
-LINKEDIN POST GUIDELINES (strict — not suggestions):
-- This is ONE post that synthesises ALL stories into a single point of view.
-  Do NOT write a bullet-list of summaries. Find the angle that connects them.
-- Open with a specific observation or counter-intuitive claim — never a question.
-- State a position, even a minority one, and defend it briefly.
-- Short sentences. One idea per sentence. Paragraph breaks generously.
-- Maximum 200 words total (longer is allowed only when 3+ stories require it,
-  hard cap 280 words).
-- If source URLs are provided: include the actual URL in the post where relevant,
-  preceded by the 👉 emoji. Example: "👉 https://example.com". Do NOT write the
-  literal text "[URL]" — always use the real URL from the story data.
-  Do NOT add a separate "Read more" section — weave the URLs naturally or list
-  them after the closing line.
-- Hashtags at the very end, maximum 4–5 relevant ones.
-- No first-person — write as an observer sharing insights.
-- Tone: professional, forward-looking, provocative when the material invites it.
-- Simple wording — not a native English speaker audience.
-- Language: {post_language}.
-- FORBIDDEN words/phrases: "game-changer", "disruptive", "revolutionary",
-  "leverage" (as verb), "ecosystem", "excited to share", "thrilled to announce",
-  "in today's rapidly evolving landscape", rhetorical engagement-bait questions.
-- FORBIDDEN framing: never call out a group, camp, side, or school of thought as
-  wrong, misguided, or missing the point. Do not write sentences like "Both camps
-  miss the point", "Critics are wrong", "Optimists forget X". Present a position
-  without putting others down.
-- NEVER use emojis except 👉 before source URLs.\
-"""
-
-_EDITORIAL_GUIDELINES = """\
-EDITORIAL POST GUIDELINES (strict — not suggestions):
-- Write ONE unified, flowing article — not a list of summaries, not one paragraph
-  per source. The sources are raw material; the post is a single coherent text
-  built from the insight they share.
-- FORBIDDEN structure: one paragraph per source URL. If every paragraph ends with
-  a 👉 link, you have written a list, not a post. Start over.
-- Find the thread that connects the stories and build the post around that thread.
-- Open with a specific observation, a concrete fact, or a counter-intuitive claim.
-  Never open with a question.
-- State a position and develop it. The post should read as argued prose, not a digest.
-- Short sentences. Paragraph breaks generously. Vary sentence length.
-- Length: 200–350 words. Do not pad; do not cut substance to hit a ceiling.
-- URLs: after the last paragraph, add a mandatory section exactly like this:
-    Pour aller plus loin :
-    👉 https://...
-    👉 https://...
-  Include EVERY source URL from the stories. This section is required — omitting
-  it is an error. Do NOT embed URLs inside the body paragraphs.
-- Hashtags at the very end, after the URLs, maximum 4–5 relevant ones.
-- No first-person — write as an attentive observer.
-- Language: {post_language}.
-- FORBIDDEN words/phrases: "game-changer", "disruptive", "revolutionary",
-  "leverage" (as verb), "ecosystem", "excited to share", "thrilled to announce",
-  "in today's rapidly evolving landscape", rhetorical engagement-bait questions.
-- FORBIDDEN framing: never call out a group, camp, side, or school of thought as
-  wrong, misguided, or missing the point. Do not write sentences like "Both camps
-  miss the point", "Critics are wrong", "Optimists forget X". Present a position
-  without putting others down.
-- NEVER use emojis except 👉 before source URLs.\
-"""
-
-
-def _build_stories_block(stories: list[dict]) -> str:
-    """Format the selected stories for injection into the prompt."""
-    lines = []
-    for i, s in enumerate(stories, 1):
-        lines.append(f"STORY {i}:")
-        lines.append(f"  Sub-category : {s.get('category', '')}")
-        lines.append(f"  Grade        : {s.get('grade', '')}/10")
-        lines.append(f"  Subject      : {s.get('subject', '')}")
-        lines.append(f"  Summary      : {s.get('summary', '')}")
-        url = s.get("source", "").strip()
-        if url:
-            lines.append(f"  Source URL   : {url}")
-        lines.append("")
-    return "\n".join(lines)
-
+# ─── Post writer (delegates to alabama_core) ─────────────────────────────────
 
 def write_linkedin_post(
     stories: list[dict],
     author_context: str = "",
     owned_source_labels: set | None = None,
 ) -> dict:
-    """
-    Write ONE LinkedIn post + tweet covering all selected stories.
-    Uses Claude Sonnet if ANTHROPIC_API_KEY is set, otherwise falls back to GPT-4o.
-    If any selected story comes from an owned source, switches to first-person
-    promotional voice.
-
-    Args:
-        stories: list of story dicts (already selected by select_stories())
-        author_context: concatenated markdown from the context/ dir
-        owned_source_labels: set of source labels that belong to the author
-
-    Returns:
-        dict with keys: linkedin_post (str), tweet (str)
-    """
-    is_owned = any(
-        s.get("is_owned_source")
-        or (owned_source_labels and s.get("from_newsletter", "") in owned_source_labels)
-        for s in stories
+    """Delegates to alabama_core.write_post — Alabama is the source of truth."""
+    return _core_write_linkedin_post(
+        stories=stories,
+        author_context=author_context,
+        owned_source_labels=owned_source_labels,
     )
-
-    context_block = (
-        f"ABOUT THE AUTHOR (voice, background, companies, positions):\n{author_context}\n\n---\n\n"
-        if author_context
-        else ""
-    )
-
-    n = len(stories)
-    stories_block = _build_stories_block(stories)
-
-    if is_owned:
-        voice_instruction = (
-            f"IMPORTANT — OWNED CONTENT MODE:\n"
-            f"The stor{'y' if n == 1 else 'ies'} below {'is' if n == 1 else 'are'} "
-            f"the author's OWN production (book, podcast, article, video, etc.).\n"
-            f"Write in FIRST PERSON ('I', 'my', 'me'). "
-            f"The goal is to promote the author's work warmly and personally — "
-            f"not as a news summary, but as an invitation to engage with their content.\n"
-            f"Keep the author's voice (see guidelines), stay personal and embodied, "
-            f"and avoid aggressive marketing language.\n\n"
-        )
-    else:
-        voice_instruction = ""
-
-    prompt = (
-        f"You are writing a LinkedIn post on behalf of the author described in the context below.\n\n"
-        f"{context_block}"
-        f"{voice_instruction}"
-        f"GUIDELINES:\n{(_EDITORIAL_GUIDELINES if os.environ.get('POST_STYLE','').strip().lower() == 'editorial' else _DEFAULT_GUIDELINES).format(post_language=os.environ.get('POST_LANGUAGE', 'match the language of the source stories'))}\n\n"
-        f"You have {n} stor{'y' if n == 1 else 'ies'} from the same news sub-category "
-        f"to work with. Your task is to write ONE LinkedIn post that:\n"
-        f"  - Finds the thread connecting {'it' if n == 1 else 'them'}\n"
-        f"  - Builds a coherent point of view illustrated by the "
-        f"{'story' if n == 1 else 'stories'}\n"
-        f"  - Does NOT read as a list of news items\n\n"
-        f"{'STORY:' if n == 1 else 'STORIES:'}\n{stories_block}\n"
-        f"INSTRUCTIONS:\n"
-        f"1. Write the LinkedIn post following the guidelines exactly.\n"
-        f"2. Write a companion tweet: max 140 chars, "
-        f"{'first person, personal and inviting' if is_owned else 'no hashtags, punchy'}, "
-        f"include one URL if available.\n\n"
-        f"Return ONLY a valid JSON object with exactly four keys:\n"
-        f'  "title": string (30–50 characters, punchy headline summarising the post angle)\n'
-        f'  "summary": string (exactly 2 sentences, max 40 words total, plain text — used as a teaser in post listings)\n'
-        f'  "linkedin_post": string\n'
-        f'  "tweet": string (max 140 chars, no hashtags)\n'
-        f"No preamble, no explanation, no markdown fences. Just the JSON object."
-    )
-
-    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    use_anthropic = bool(anthropic_key)
-
-    try:
-        if use_anthropic:
-            from anthropic import Anthropic
-            client = Anthropic(api_key=anthropic_key)
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=1500,
-                timeout=40.0,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            text = response.content[0].text.strip()
-            log.info("LinkedIn post written via Claude Sonnet")
-        else:
-            import openai
-            client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                max_tokens=1500,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            text = response.choices[0].message.content.strip()
-            log.info("LinkedIn post written via GPT-4o (ANTHROPIC_API_KEY not set)")
-
-        # Strip markdown fences if present
-        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-        text = re.sub(r"\s*```$", "", text)
-        text = text.strip()
-
-        # Find JSON object boundaries
-        start = text.find("{")
-        end   = text.rfind("}") + 1
-        if start != -1 and end > start:
-            text = text[start:end]
-
-        result = json.loads(text)
-
-        # Handle occasional double-encoded JSON
-        lp = result.get("linkedin_post", "")
-        if isinstance(lp, str) and lp.strip().startswith("{"):
-            try:
-                inner = json.loads(lp)
-                if "linkedin_post" in inner:
-                    result = inner
-            except Exception:
-                pass
-
-        result.setdefault("title", "")
-        result.setdefault("summary", "")
-        result.setdefault("linkedin_post", text)
-        result.setdefault("tweet", "")
-        return result
-
-    except Exception as e:
-        if use_anthropic:
-            # Anthropic call failed — fall back to GPT-4o if key is available
-            log.warning(f"Claude Sonnet failed ({e}) — falling back to GPT-4o.")
-            try:
-                import openai
-                client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-                response = client.chat.completions.create(
-                    model="gpt-4o",
-                    max_tokens=1500,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                text = response.choices[0].message.content.strip()
-                log.info("LinkedIn post written via GPT-4o (Anthropic fallback).")
-                text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-                text = re.sub(r"\s*```$", "", text).strip()
-                start = text.find("{")
-                end   = text.rfind("}") + 1
-                if start != -1 and end > start:
-                    text = text[start:end]
-                result = json.loads(text)
-                result.setdefault("title", "")
-                result.setdefault("summary", "")
-                result.setdefault("linkedin_post", text)
-                result.setdefault("tweet", "")
-                return result
-            except Exception as e2:
-                log.error(f"GPT-4o fallback also failed: {e2}", exc_info=True)
-        else:
-            log.error(f"LinkedIn post generation failed: {e}", exc_info=True)
-        return {"linkedin_post": "", "tweet": ""}
 
 
 # ─── Buffer push ──────────────────────────────────────────────────────────────

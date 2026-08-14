@@ -202,6 +202,9 @@ stories = []  # grade >= 5
 if emails:
     import anthropic as _anthropic
     import openai
+    from alabama_core.config import get_categories, get_subcategories, get_all_codes
+    from alabama_core.extract_stories import extract_stories as _extract_stories
+
     oc = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
     # EXTRACTION_MODEL=haiku uses Claude Haiku 4.5; default is GPT-4o (preserves prior behaviour)
@@ -233,134 +236,22 @@ if emails:
     except Exception as e:
         log.warning(f"Could not load state: {e}")
 
-    from config import get_categories, get_subcategories, get_all_codes
-    _grade_criteria = os.environ.get(
-        "GRADE_CRITERIA",
-        "business impact + novelty",
-    )
+    _grade_criteria = os.environ.get("GRADE_CRITERIA", "business impact + novelty")
     _cats = get_categories()
     _subcats = get_subcategories()
     _codes = ",".join(get_all_codes())
-    _cat_lines = "\n".join(
-        f"      {k} = {v}" for k, v in _cats.items()
+
+    all_extracted_stories = _extract_stories(
+        items=emails,
+        cats=_cats,
+        subcats=_subcats,
+        codes=_codes,
+        grade_criteria=_grade_criteria,
+        existing_sources=existing_sources,
+        openai_client=oc,
+        anthropic_client=_ac_extract,
+        use_haiku=bool(_ac_extract),
     )
-    _subcat_lines = "\n".join(
-        f"      {k} = {v}" for k, v in _subcats.items()
-    )
-    _cat_names = ", ".join(_cats.values())
-
-    # NOTE: Grade filter is intentionally removed from prompt.
-    # We get all relevant stories and filter in Python for accurate counts.
-    prompt = (
-        f"You are a market intelligence analyst. Process ALL {len(emails)} emails below.\n"
-        f"For each email, determine if it contains business news relevant to:\n"
-        f"{_cat_names}.\n\n"
-        f"CRITICAL — DECOMPOSE ROUNDUPS: If an email contains a list or roundup section "
-        f"(e.g. 'Top 5 AI Tools', 'New & Trending', 'This Week in AI', bullet lists of products/news), "
-        f"extract EACH item as a SEPARATE story object. Do not collapse a list into one story.\n\n"
-        f"INCLUSION BIAS: When in doubt, include. It is better to extract a grade-3 story "
-        f"than to miss a grade-8 story. Only skip items that are clearly irrelevant "
-        f"(social notifications, security codes, delivery receipts, pure marketing with zero news value).\n\n"
-        f"PAY SPECIAL ATTENTION to:\n"
-        f"  - New AI model launches or capability announcements (always extract)\n"
-        f"  - New AI tools, products, or developer features (always extract, even if brief)\n"
-        f"  - Funding rounds for startups in these categories\n"
-        f"  - Enterprise deployments or partnerships\n\n"
-        f"If RELEVANT: extract as a story object with these fields:\n"
-        f"  - category: one of {_codes}\n"
-        f"    Parent categories — assign based on the PRIMARY SUBJECT of the story:\n"
-        f"{_cat_lines}\n"
-        f"    Sub-categories (letter):\n"
-        f"{_subcat_lines}\n"
-        f"    IMPORTANT: assign based on the PRIMARY subject of the story — "
-        f"the most specific matching category wins.\n"
-        f"  - grade: integer 1-10 ({_grade_criteria})\n"
-        f"  - title: a concise headline for THIS specific story (5–10 words, not the newsletter email subject)\n"
-        f"  - summary: factual summary, minimum 3 sentences and 60 words, maximum 120 words. Focus on the topic and findings — do NOT mention the author's name or attribute claims to them (e.g. never write 'X argues that…' or 'According to X…'). Write as if reporting the facts directly.\n"
-        f"  - source: URL from the email if available, else empty string\n"
-        f"  - from_newsletter: sender name\n"
-        f"  - subject: email subject\n"
-        f"  - is_owned_source: true if the email was tagged [OWNED CONTENT], else false\n\n"
-        f"Skip if source URL already in this list: {existing_sources[:20]}\n"
-        f"Include ALL relevant stories regardless of grade — include grades 1 through 10.\n\n"
-        f"Return ONLY a valid JSON array. No markdown, no explanation, no preamble.\n\n"
-        f"EMAILS:\n{{email_text}}"
-    )
-
-    _EXTRACTION_BATCH_SIZE = 30  # keep output well within 8k token limit
-    all_extracted_stories = []
-
-    for batch_start in range(0, len(emails), _EXTRACTION_BATCH_SIZE):
-        batch = emails[batch_start:batch_start + _EXTRACTION_BATCH_SIZE]
-        batch_end = batch_start + len(batch)
-        log.info(f"Extracting batch {batch_start+1}–{batch_end} of {len(emails)} items…")
-
-        email_text = ""
-        for i, em in enumerate(batch):
-            owned_flag = " [OWNED CONTENT — written by the author themselves]" if em.get("is_owned_source") else ""
-            email_text += (
-                f"EMAIL {i+1}:{owned_flag}\n"
-                f"From: {em['from'][:60]}\n"
-                f"Subject: {em['subject'][:80]}\n"
-                f"Body: {em['body_text'][:5000]}\n\n"
-            )
-
-        batch_prompt = (
-            prompt
-            .replace("{email_text}", email_text)
-            .replace(f"ALL {len(emails)} emails", f"ALL {len(batch)} emails")
-        )
-
-        try:
-            raw = ""
-            if _ac_extract:
-                _resp = _ac_extract.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=8000,
-                    messages=[{"role": "user", "content": batch_prompt}],
-                )
-                raw = _resp.content[0].text.strip()
-                log.info(f"Batch {batch_start+1}–{batch_end}: extracted via Claude Haiku 4.5")
-            else:
-                resp = oc.chat.completions.create(
-                    model="gpt-4o",
-                    max_tokens=8000,
-                    messages=[{"role": "user", "content": batch_prompt}],
-                )
-                raw = resp.choices[0].message.content.strip()
-                log.info(f"Batch {batch_start+1}–{batch_end}: extracted via GPT-4o")
-            raw = raw.replace("```json", "").replace("```", "").strip()
-            batch_stories = json.loads(raw)
-            all_extracted_stories.extend(batch_stories)
-            log.info(f"Batch {batch_start+1}–{batch_end}: {len(batch_stories)} stories found")
-        except json.JSONDecodeError as e:
-            log.error(f"Batch {batch_start+1}–{batch_end}: invalid JSON — {e}")
-            log.error(f"Raw response (first 500 chars): {raw[:500]}")
-        except Exception as e:
-            log.error(f"Batch {batch_start+1}–{batch_end}: extraction failed — {e}", exc_info=True)
-
-    now_iso = datetime.now(timezone.utc).isoformat()
-    for s in all_extracted_stories:
-        s["timestamp"] = now_iso
-        # Strip tracking query params from source URLs
-        url = s.get("source", "").strip()
-        if url and "?" in url:
-            s["source"] = url.split("?")[0]
-
-    # Deduplicate by URL within this run — keep highest grade when same URL appears multiple times
-    _seen_urls: dict = {}
-    for s in all_extracted_stories:
-        url = s.get("source", "").strip()
-        if url:
-            existing = _seen_urls.get(url)
-            if existing is None or int(s.get("grade", 0)) > int(existing.get("grade", 0)):
-                _seen_urls[url] = s
-        else:
-            _seen_urls[id(s)] = s  # no URL — keep as-is
-    deduped = list(_seen_urls.values())
-    if len(deduped) < len(all_extracted_stories):
-        log.info(f"Deduplication: {len(all_extracted_stories)} → {len(deduped)} stories (removed {len(all_extracted_stories) - len(deduped)} duplicates)")
-    all_extracted_stories = deduped
 
     # Filter by grade in Python — gives accurate counts
     stories = [s for s in all_extracted_stories if int(s.get("grade", 0)) >= 5]
