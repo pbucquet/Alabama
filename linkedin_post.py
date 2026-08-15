@@ -293,9 +293,9 @@ def generate_and_push_linkedin_posts(stories: list[dict], owned_source_labels: s
     if not twitter_enabled:
         log.info("TWITTER_ENABLED=false — skipping LinkedIn companion tweet push.")
     elif tweet and twitter_channel_id:
-        if len(tweet) > 140:
+        if len(tweet) > 280:
             log.warning(f"Tweet too long ({len(tweet)} chars) — truncating.")
-            tweet = tweet[:137] + "…"
+            tweet = tweet[:277] + "…"
         tweet_pushed = _buffer_push(tweet, twitter_channel_id, label="tweet")
     elif tweet and not twitter_channel_id:
         log.info("Tweet written but TWITTER_CHANNEL_ID not set — skipping tweet push.")
