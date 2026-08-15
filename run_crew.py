@@ -352,11 +352,19 @@ def write_tweets(stories: list, oc, owned_source_labels: set | None = None) -> l
             except Exception as e:
                 log.error(f"Tweet generation failed (attempt {attempt+1}): {e}")
         if tweet is None:
-            # All retries exhausted — hard-truncate rather than drop the tweet entirely
+            # All retries exhausted — build a clean fallback without a broken URL
             fallback = candidate if "candidate" in dir() else ""
             if fallback:
-                tweet = fallback[:137] + "…"
-                log.warning(f"All retries failed — hard-truncating to 140 chars: {tweet}")
+                if url and url in fallback:
+                    # Keep text-only part (before the URL), truncate that, then re-append the URL
+                    text_only = fallback.replace(url, "").strip()
+                    max_text = 140 - (TCO_LEN + 1)  # 116 chars
+                    if len(text_only) > max_text:
+                        text_only = text_only[:max_text - 1] + "…"
+                    tweet = f"{text_only} {url}"
+                else:
+                    tweet = fallback[:137] + "…"
+                log.warning(f"All retries failed — using clean fallback ({len(tweet)} raw chars): {tweet}")
             else:
                 log.error("Tweet generation produced no output — skipping this story.")
                 continue
