@@ -237,7 +237,18 @@ if emails:
     except Exception as e:
         log.warning(f"Could not load state: {e}")
 
-    _grade_criteria = os.environ.get("GRADE_CRITERIA", "business impact + novelty")
+    _default_grade_criteria = (
+        "Grade stories 1–10 using these thresholds:\n"
+        "1–2: off-topic, purely promotional, or no factual substance.\n"
+        "3–4: real topic but weak signal — vague, speculative, unverified, or too narrow/local to matter beyond a very small audience.\n"
+        "5–6: relevant and factual, but limited impact — recap of already-known developments, an incremental step, or a single isolated actor with no broader implication.\n"
+        "7–8: meaningful development — a notable event, study, decision, or shift with clear implications beyond the immediate context; well-sourced.\n"
+        "9–10: landmark — redefines or significantly disrupts the field; involves major actors or authoritative sources; genuinely new, not a recap; high relevance for anyone working in this space."
+    )
+    _grade_criteria = os.environ.get("GRADE_CRITERIA", _default_grade_criteria)
+    _addendum = os.environ.get("GRADE_CRITERIA_ADDENDUM", "").strip()
+    if _addendum:
+        _grade_criteria += "\n\nINSTANCE-SPECIFIC ADJUSTMENTS:\n" + _addendum
     _cats = get_categories()
     _subcats = get_subcategories()
     _codes = ",".join(get_all_codes())
