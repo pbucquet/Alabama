@@ -178,7 +178,8 @@ total_fetched = len(emails)
 owned_source_labels: set[str] = set()
 try:
     from fetch_web_sources import fetch_web_sources, get_owned_urls
-    web_items = fetch_web_sources(since=since)
+    _repo_root = os.path.dirname(os.path.abspath(__file__))
+    web_items = fetch_web_sources(sources_path=os.path.join(_repo_root, "sources.md"), since=since)
     if web_items:
         emails.extend(web_items)
         owned_source_labels = {
