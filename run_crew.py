@@ -14,6 +14,62 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
+# ─── Alabama Lite config fetch ────────────────────────────────────────────────
+# If ALABAMA_API_KEY is set, pull instance config from the alabama-lite UI and
+# override env vars so .env values are the fallback, not the source of truth.
+
+_lite_api_key = os.environ.get("ALABAMA_API_KEY", "")
+_lite_url = os.environ.get("ALABAMA_LITE_URL", "https://alabama.plzfix.ai").rstrip("/")
+
+if _lite_api_key:
+    try:
+        import requests as _r
+        _resp = _r.get(
+            f"{_lite_url}/api/v1/config",
+            headers={"Authorization": f"Bearer {_lite_api_key}"},
+            timeout=10,
+        )
+        if _resp.ok:
+            _cfg = _resp.json()
+            # Simple env-var overrides
+            _ENV_MAP = {
+                "agent_name":              "AGENT_NAME",
+                "story_categories":        "STORY_CATEGORIES",
+                "story_subcategories":     "STORY_SUBCATEGORIES",
+                "grade_criteria":          "GRADE_CRITERIA",
+                "grade_criteria_addendum": "GRADE_CRITERIA_ADDENDUM",
+                "post_language":           "POST_LANGUAGE",
+                "post_style":              "POST_STYLE",
+            }
+            for _field, _var in _ENV_MAP.items():
+                if _cfg.get(_field):
+                    os.environ[_var] = _cfg[_field]
+
+            # Context files — write to a sibling dir and point CONTEXT_DIR there
+            _context_fields = {
+                "profile.md":          _cfg.get("profile_md", ""),
+                "voice_and_tone.md":   _cfg.get("voice_and_tone_md", ""),
+                "topics_and_positions.md": _cfg.get("topics_md", ""),
+            }
+            if any(_context_fields.values()):
+                _ctx_dir = os.path.join(os.path.dirname(__file__), "context_from_lite")
+                os.makedirs(_ctx_dir, exist_ok=True)
+                for _fname, _content in _context_fields.items():
+                    _fpath = os.path.join(_ctx_dir, _fname)
+                    if _content:
+                        with open(_fpath, "w", encoding="utf-8") as _fh:
+                            _fh.write(_content)
+                    elif os.path.exists(_fpath):
+                        os.remove(_fpath)
+                os.environ["CONTEXT_DIR"] = _ctx_dir
+        else:
+            sys.stderr.write(
+                f"[alabama-lite] Config fetch failed: HTTP {_resp.status_code} — "
+                "falling back to .env values\n"
+            )
+    except Exception as _e:
+        sys.stderr.write(f"[alabama-lite] Config fetch error: {_e} — falling back to .env values\n")
+
 # ─── Sophie notification helper ───────────────────────────────────────────────
 
 import requests as _req
