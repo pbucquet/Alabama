@@ -322,13 +322,14 @@ if emails:
     )
 
     # Filter by grade in Python — gives accurate counts
-    stories = [s for s in all_extracted_stories if int(s.get("grade", 0)) >= 5]
+    _min_brief_grade = int(os.environ.get("MIN_BRIEF_GRADE", "5"))
+    stories = [s for s in all_extracted_stories if int(s.get("grade", 0)) >= _min_brief_grade]
 
     log.info(
         f"Story extraction complete: "
         f"{total_fetched} emails fetched | "
         f"{len(all_extracted_stories)} stories extracted | "
-        f"{len(stories)} stories included (grade>=5)"
+        f"{len(stories)} stories included (grade>={_min_brief_grade})"
     )
 
     # Save state — store only grade>=5 stories
