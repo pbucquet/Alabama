@@ -332,8 +332,9 @@ if emails:
         f"{len(stories)} stories included (grade>={_min_brief_grade})"
     )
 
-    # Save state — store only grade>=5 stories
-    all_stories = fresh + stories
+    # Save state — store all extracted stories (not just the filtered ones)
+    # so the deduplication list stays complete regardless of MIN_BRIEF_GRADE
+    all_stories = fresh + all_extracted_stories
     try:
         with open(state_path, "w") as f:
             json.dump({
