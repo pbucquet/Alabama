@@ -321,6 +321,19 @@ if emails:
         use_haiku=bool(_ac_extract),
     )
 
+    # Hard dedup: remove any story whose source URL was already seen (GPT-4o hint is unreliable)
+    _seen_sources = set(existing_sources)
+    _deduped = []
+    for s in all_extracted_stories:
+        src = s.get("source", "").strip()
+        if src and src in _seen_sources:
+            log.info(f"Dedup: skipping already-seen story '{s.get('title', '')}' ({src[:60]})")
+            continue
+        if src:
+            _seen_sources.add(src)
+        _deduped.append(s)
+    all_extracted_stories = _deduped
+
     # Filter by grade in Python — gives accurate counts
     _min_brief_grade = int(os.environ.get("MIN_BRIEF_GRADE", "5"))
     stories = [s for s in all_extracted_stories if int(s.get("grade", 0)) >= _min_brief_grade]
