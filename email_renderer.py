@@ -12,6 +12,7 @@ import email.mime.multipart
 import email.mime.text
 
 from config import get_categories, get_subcategories
+from shared import smtp as shared_smtp
 
 
 def _e(text) -> str:
@@ -157,21 +158,9 @@ def send_briefing_email(subject: str, body_html: str) -> str:
     import logging
     log = logging.getLogger(__name__)
     try:
-        sender_email    = os.environ["SENDER_EMAIL"]
-        sender_password = os.environ["SENDER_APP_PASSWORD"]
-        smtp_server     = os.environ.get("SENDER_SMTP_SERVER", "smtp.zoho.com")
-        smtp_port       = int(os.environ.get("SENDER_SMTP_PORT", "465"))
-        recipients      = [r.strip() for r in os.environ["RECIPIENT_EMAIL"].split(",") if r.strip()]
-
-        msg = email.mime.multipart.MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"]    = sender_email
-        msg["To"]      = ", ".join(recipients)
-        msg.attach(email.mime.text.MIMEText(body_html, "html"))
-
-        with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
-            server.login(sender_email, sender_password)
-            server.sendmail(sender_email, recipients, msg.as_string())
+        account = shared_smtp.SmtpAccount.from_env("SENDER")
+        recipients = [r.strip() for r in os.environ["RECIPIENT_EMAIL"].split(",") if r.strip()]
+        shared_smtp.send(account, recipients, subject, html=body_html)
 
         log.info("Briefing email sent to %s", recipients)
         return "Email sent successfully."

@@ -41,12 +41,8 @@ import requests
 log = logging.getLogger(__name__)
 
 # ─── Shared Buffer push ───────────────────────────────────────────────────────
-_bt = _ilu.spec_from_file_location(
-    "buffer_tool",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shared", "tools", "buffer_tool.py"),
-)
-_bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
-_push_to_buffer_shared = _bm.push_to_buffer
+from shared import models as shared_models
+from shared.tools.buffer_tool import push_to_buffer as _push_to_buffer_shared
 
 
 # ─── Context loader ───────────────────────────────────────────────────────────
@@ -136,7 +132,7 @@ def _select_content_brief(story: dict, content_types: str, oc) -> dict:
     )
     try:
         resp = oc.chat.completions.create(
-            model="gpt-4o",
+            model=shared_models.model("openai"),
             max_tokens=300,
             response_format={"type": "json_object"},
             messages=[{"role": "user", "content": prompt}],
@@ -188,7 +184,7 @@ def _generate_dalle_prompt(story: dict, image_style: str, brief: dict, oc) -> st
         f"Summary  : {story.get('summary', '')}\n"
     )
     resp = oc.chat.completions.create(
-        model="gpt-4o",
+        model=shared_models.model("openai"),
         max_tokens=200,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -202,7 +198,7 @@ def _generate_dalle_prompt(story: dict, image_style: str, brief: dict, oc) -> st
 def _generate_image(dalle_prompt: str, oc) -> bytes:
     """Generate image with gpt-image-1 and return raw PNG bytes."""
     response = oc.images.generate(
-        model="gpt-image-1",
+        model=shared_models.model("image"),
         prompt=dalle_prompt,
         size="1024x1024",
         quality="medium",
@@ -291,7 +287,7 @@ def _write_caption(
         from anthropic import Anthropic
         client = Anthropic(api_key=anthropic_key)
         response = client.messages.create(
-            model="claude-sonnet-4-6",
+            model=shared_models.model("standard"),
             max_tokens=400,
             timeout=40.0,
             messages=[{"role": "user", "content": prompt}],
@@ -300,7 +296,7 @@ def _write_caption(
         log.info("Instagram caption written via Claude Sonnet")
     else:
         resp = oc.chat.completions.create(
-            model="gpt-4o",
+            model=shared_models.model("openai"),
             max_tokens=400,
             messages=[{"role": "user", "content": prompt}],
         )
