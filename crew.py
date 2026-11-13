@@ -5,13 +5,14 @@ This crew handles only the email composition and sending.
 """
 
 import os
+from shared import models as shared_models
 from crewai import Agent, Task, Crew, Process, LLM
 from tools import SendEmailTool
 
 # ─── LLM ──────────────────────────────────────────────────────────────────────
 
 gpt4o = LLM(
-    model="gpt-4o",
+    model=shared_models.model("openai"),
     api_key=os.environ.get("OPENAI_API_KEY"),
 )
 

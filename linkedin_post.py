@@ -43,9 +43,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from alabama_core.write_post import write_linkedin_post as _core_write_linkedin_post
 
-_bt = _ilu.spec_from_file_location("buffer_tool", os.path.join(os.path.dirname(__file__), "..", "shared", "tools", "buffer_tool.py"))
-_bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
-_push_to_buffer_shared = _bm.push_to_buffer
+from shared.tools.buffer_tool import push_to_buffer as _push_to_buffer_shared
 
 log = logging.getLogger(__name__)
 

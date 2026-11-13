@@ -11,6 +11,7 @@ import logging
 import shutil
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
+from shared import models as shared_models
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -178,12 +179,7 @@ log.info(f"Fetch window: {since.isoformat()} → now")
 
 import re
 
-def strip_html(html: str) -> str:
-    text = re.sub(r'<[^>]+>', ' ', html)
-    return re.sub(r'\s+', ' ', text).strip()
-
-def clean_json(raw: str) -> str:
-    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
+from shared.text import clean_json, strip_html  # noqa: E402  (same functions, shared copy)
 
 emails = []
 agentmail_key = os.environ.get("AGENTMAIL_API_KEY", "")
@@ -361,9 +357,7 @@ if emails:
 # ─── Step 4: Write and push tweets directly via Python ───────────────────────
 
 import importlib.util as _ilu
-_bt = _ilu.spec_from_file_location("buffer_tool", os.path.join(os.path.dirname(__file__), "..", "shared", "tools", "buffer_tool.py"))
-_bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
-_push_to_buffer = _bm.push_to_buffer
+from shared.tools.buffer_tool import push_to_buffer as _push_to_buffer  # noqa: E402
 
 
 def push_tweet_to_buffer(tweet_text: str) -> bool:
@@ -411,7 +405,7 @@ def write_tweets(stories: list, oc, owned_source_labels: set | None = None) -> l
         for attempt in range(5):
             try:
                 resp = oc.chat.completions.create(
-                    model="gpt-4o",
+                    model=shared_models.model("openai"),
                     max_tokens=100,
                     messages=[{"role": "user", "content": prompt}],
                 )

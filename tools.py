@@ -12,29 +12,13 @@ from datetime import datetime, timezone, timedelta
 from crewai.tools import BaseTool
 from agentmail import AgentMail
 
-_bt = _ilu.spec_from_file_location("buffer_tool", os.path.join(os.path.dirname(__file__), "..", "shared", "tools", "buffer_tool.py"))
-_bm = _ilu.module_from_spec(_bt); _bt.loader.exec_module(_bm)
-PushTweetToBufferTool = _bm.PushTweetToBufferTool
+from shared import smtp as shared_smtp
+from shared.text import clean_json, strip_html  # noqa: F401  (same functions, shared copy)
+from shared.tools.buffer_tool import PushTweetToBufferTool  # noqa: F401
 
 
 def get_client() -> AgentMail:
     return AgentMail(api_key=os.environ["AGENTMAIL_API_KEY"])
-
-
-def strip_html(html: str) -> str:
-    """Strip HTML tags and collapse whitespace to get readable plain text."""
-    text = re.sub(r'<[^>]+>', ' ', html)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
-
-def clean_json(raw: str) -> str:
-    """
-    Remove control characters that break json.loads().
-    GPT-4 sometimes embeds newlines/tabs inside JSON string values.
-    """
-    cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', raw)
-    return cleaned
 
 
 class FetchEmailsTool(BaseTool):
@@ -120,21 +104,9 @@ class SendEmailTool(BaseTool):
                 subject = data["subject"]
                 body_html = data["body_html"]
 
-            sender_email = os.environ["SENDER_EMAIL"]
-            sender_password = os.environ["SENDER_APP_PASSWORD"]
-            smtp_server = os.environ.get("SENDER_SMTP_SERVER", "smtp.zoho.com")
-            smtp_port = int(os.environ.get("SENDER_SMTP_PORT", "465"))
+            account = shared_smtp.SmtpAccount.from_env("SENDER")
             recipients = [r.strip() for r in os.environ["RECIPIENT_EMAIL"].split(",") if r.strip()]
-
-            msg = email.mime.multipart.MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = sender_email
-            msg["To"] = ", ".join(recipients)
-            msg.attach(email.mime.text.MIMEText(body_html, "html"))
-
-            with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
-                server.login(sender_email, sender_password)
-                server.sendmail(sender_email, recipients, msg.as_string())
+            shared_smtp.send(account, recipients, subject, html=body_html)
 
             return "Email sent successfully."
         except Exception as e:
